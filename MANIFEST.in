@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-exclude rsyncdirector/integration_tests *
+recursive-exclude rsyncdirector/tests *
+recursive-exclude rsyncdirector/resources*
+recursive-exclude deployment *

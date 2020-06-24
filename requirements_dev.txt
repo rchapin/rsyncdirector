@@ -1,0 +1,5 @@
+setuptools==75.8.0
+pip-tools
+pkginfo
+twine
+pytest
