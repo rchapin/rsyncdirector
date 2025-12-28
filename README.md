@@ -23,10 +23,12 @@ There is a companion program, [`rsyncdirector_deploy`](https://github.com/rchapi
 ## Forcing a Run Now
 
 The `rsyncdirector` listens for `SIGHUP` events and when receives one will immediately schedule a `run-once` execution of the configured jobs.
+
 1. Get the PID of the `rsyncdirector` process.  If there are multiple instances of it running you will need to adjust the way you search for the PID.
     ```
     pgrep rsyncdirector
     ```
+    
 1. Send the `SIGHUP`
     ```
     kill -SIGHUP <PID>
