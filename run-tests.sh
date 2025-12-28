@@ -327,8 +327,8 @@ function run_tests {
     coverage run --append -m unittest discover -s rsyncdirector/integration_tests --failfast # add -k $test_name
   fi
 
-  coverage report --include="rsyncdirector/*"
-  coverage html
+  coverage report --omit=rsyncdirector/integration_tests/*
+  coverage html --omit=rsyncdirector/integration_tests/*
   set +e
 }
 
