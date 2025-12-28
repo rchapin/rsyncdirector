@@ -107,6 +107,9 @@ class ITBase(unittest.TestCase):
                         process.kill()
                         process.wait(timeout=3)
                         logger.info(f"process terminated; process.name={process.name()}, pid={pid}")
+                    except psutil.NoSuchProcess as e:
+                        logger.info(f"process is no longer extant; pid={pid}; e={e}")
+                        return None
                     except Exception as e:
                         self.fail(
                             f"error terminating process; process.name={process.name()}, pid={pid}, port={port}"

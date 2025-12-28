@@ -47,6 +47,8 @@ class RsyncDirector(Thread):
 
     PID_FILE_DIR_DEFAULT = "/var/run/rsyncdirector"
 
+    JOB_ID_RUNONCE = "runonce"
+
     def __init__(self, logger: logging.Logger):
         Thread.__init__(self)
         self.logger = logger
@@ -134,15 +136,23 @@ class RsyncDirector(Thread):
         return f"rsyncdirector-{id}.pid"
 
     def __event_listener(self, event):
+        def list_jobs():
+            for job in self.scheduler.get_jobs():
+                self.logger.info(f"Job id={job.id}, scheduled for next run at {job.next_run_time}")
+
         if self.runonce and event.code == events.EVENT_JOB_EXECUTED:
-            self.logger.info("runonce job finished")
+            self.logger.info("runonce job finished, exiting")
             if not self.is_shutdown():
                 self.shutdown()
                 return
 
         if event.code == events.EVENT_JOB_ADDED:
-            for job in self.scheduler.get_jobs():
-                self.logger.info(f"Job id={job.id}, scheduled for next run at {job.next_run_time}")
+            self.logger.info("scheduler event: EVENT_JOB_ADDED")
+            list_jobs()
+
+        if event.code == events.EVENT_JOB_EXECUTED and event.job_id == RsyncDirector.JOB_ID_RUNONCE:
+            self.logger.info("runonce job finished")
+            list_jobs()
 
     def is_blocked_local(blocks_on_conf: Dict, logger: logging.Logger) -> bool:
         path = blocks_on_conf["path"]
@@ -398,7 +408,9 @@ class RsyncDirector(Thread):
     def schedule_runonce_job(self):
         if not self.scheduled_job_running:
             self.logger.info(f"Scheduling a runonce job")
-            self.scheduler.add_job(max_instances=1, id="runonce", func=self.exec_job)
+            self.scheduler.add_job(
+                max_instances=1, id=RsyncDirector.JOB_ID_RUNONCE, func=self.exec_job
+            )
 
     def schedule_cron_job(self):
         self.logger.info(f"Scheduling cron job with schedule={self.cron_schedule}")
