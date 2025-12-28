@@ -1,0 +1,45 @@
+[build-system]
+# metadata-version = "2.2" because twine only supports up to version 2.2
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rsyncdirector"
+version = "0.0.1"
+authors = [{ name = "Ryan Chapin", email = "rchapin@nbinteractive.com" }]
+description = "A tool to orchestrate rsyncing of data between multiple machines and instances of rsyncdirector"
+license = { file = "LICENSE" }
+requires-python = ">=3.13"
+dynamic = ["readme", "dependencies", "optional-dependencies"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.scripts]
+rsyncdirector = "rsyncdirector.main:main"
+
+[project.urls]
+Homepage = "https://github.com/rchapin/rsyncdirector"
+readme = "https://github.com/rchapin/rsyncdirector/README.md"
+
+[tool.setuptools.dynamic]
+readme = { file = ["README.md"] }
+dependencies = { file = ["requirements.txt"] }
+optional-dependencies.test = { file = ["requirements_test.txt"] }
+optional-dependencies.dev = { file = ["requirements_dev.txt"] }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rsyncdirector*"]
+exclude = [
+    "rsyncdirector.integration_tests*",
+    "rsyncdirector.tests*",
+    "rsyncdirector.resources*",
+    "deployment*",
+]
+
+[tool.black]
+line-length = 100
+

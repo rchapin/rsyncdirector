@@ -1,0 +1,11 @@
+{
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [
+    "-s",
+    "-v"
+  ],
+  "debug.internalConsoleOptions": "openOnSessionStart"
+}

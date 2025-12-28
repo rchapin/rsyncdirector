@@ -1,0 +1,110 @@
+# This software is released under the Revised BSD License.
+# See LICENSE for details
+#
+# Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
+# All rights reserved.
+
+# The "name" for this instance of rsyncdirector.  It will be appended to the pid file.
+rsync_id: "my_rsyncdirector_instance"
+
+# Schedule on which we want these jobs to run. Uses the same syntax as a standard Linux cron job.
+cron_schedule: "* * * * *"
+
+# Directory into which we will write a pid file on the host on which rsyncdirector is running.  This
+# will prevent two instances of the application running at the same time.  Default is
+# /var/run/rsyncdirector.
+pid_file_dir: /var/run/rsyncdirector
+
+# Optional configurations for the prometheus_client that when running will return Prometheus metrics
+# when hitting http://$host:$port/metrics.  Defaults are listed below.
+metrics:
+  # The ip address on which the metrics server listens
+  addr: 0.0.0.0
+  # The port on which the metrics server listens
+  port: 9090
+  # Amount of time, in seconds, to wait for the metrics server to be listening in the specified TCP
+  # port before timing out.
+  startup_timeout_seconds: 10
+  # Amount of time, in seconds, to wait after failing to make a TCP connection to the metrics server
+  # before retrying.
+  startup_retry_wait_seconds: 2
+  # Maximum number of times to attempt to make a TCP connection to the metrics server.
+  startup_retry_limit: 3
+
+# List of rsync jobs. Each job will contain a list syncs: source and destination dirs/files to be
+# rsynced along with any arbitrary rsync command options supported by the installation of rsync on
+# the local host.
+jobs:
+  # Example of a job that rsyncs to the localhost.
+  - id: local_rsync
+    type: local
+    # List of source:dest dirs/files to rsync
+    syncs:
+      - source: /source/path
+        dest: /path/on/local/host
+        # Any arbitrary rsync options supported by the underlying rsync installation.
+        opts:
+          - "-av"
+          - "--delete"
+          - "--exclude '.cache'"
+          - "--exclude 'Downloads'"
+
+  # Example of a job that rsyncs from the localhost to a remote host.
+  - id: local_desktop_to_backup_a
+    type: remote
+    # The user that we will use to make the rsync connection to the dest host.
+    user: root
+    host: backup_a.example.com
+    # Optional overriding SSH port.
+    port: 22000
+    # Optional path to a private SSH key to use to authenticate with the remote host.
+    private_ssh_key: /var/tmp/some-private-ssh-key
+
+    # Optional, definitions for any arbitrary number of lock files that this process will create and
+    # manage on either the localhost or any remote. The lockfiles will indicate that this process is
+    # running this rsync job.
+    lock_files:
+      - type: local
+        path: /var/run/rsyncdirector/local_desktop_to_backup_a
+      - type: remote
+        host: backup_a.example.com
+        user: root
+        # Optional overriding SSH port
+        port: 22000
+        # Optional path to a private SSH key to use to authenticate
+        # with the remote host.
+        private_ssh_key: /var/tmp/some-private-ssh-key
+        path: /var/run/rsyncdirector/local_desktop_to_backup_a
+
+    # Optional configuration that directs the job to block on any of the specified block files on
+    # either the localhost or any remote host.  This is useful if you want to ensure that this job
+    # does not start until another job has completed.
+    blocks_on:
+      - type: remote
+        # The user name that we will use to connect to the remote host
+        user: root
+        host: backup_a.example.com
+        # Optional overriding SSH port
+        port: 22000
+        # Optional path to a private SSH key to use to authenticate with the remote host.
+        private_ssh_key: /var/tmp/some-private-ssh-key
+        path: /var/run/some-block-file
+        # Amount of time in seconds to wait to retry
+        wait_time: 300
+        # Optional timeout, in seconds, to wait for the lock file to be released before skipping the
+        # job.  Ommitting a timeout will mean that the job will wait forever for the block file to
+        # be removed.
+        timeout: 3600
+      - type: local
+        path: /lockfile/on/localhost
+        wait_time: 300
+
+    # List of source:dest dirs/files to rsync
+    syncs:
+      - source: /source/path
+        dest: /path/on/remote/host
+        opts:
+          - "-av"
+          - "--delete"
+          - "--exclude '.cache'"
+          - "--exclude 'Downloads'"

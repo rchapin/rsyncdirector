@@ -1,0 +1,62 @@
+<mxfile host="app.diagrams.net" modified="2021-02-17T01:29:51.434Z" agent="5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36" etag="slNXSZodSZr6GeBGTlCY" version="14.3.2" type="github">
+  <diagram id="9oh7qsvAncNWxjIL04bf" name="Page-1">
+    <mxGraphModel dx="1952" dy="531" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="duJ8XisY2NvJt75ONOaO-10" value="location_a" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="-10" y="20" width="290" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-3" value="backup_a" style="points=[];aspect=fixed;html=1;align=center;shadow=0;dashed=0;image;image=img/lib/allied_telesis/computer_and_terminals/Server_Desktop.svg;" vertex="1" parent="1">
+          <mxGeometry x="67.5" y="190" width="71" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-4" value="local_desktop" style="points=[];aspect=fixed;html=1;align=center;shadow=0;dashed=0;image;image=img/lib/allied_telesis/computer_and_terminals/Personal_Computer_with_Server.svg;" vertex="1" parent="1">
+          <mxGeometry x="130" y="54" width="70" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-12" value="location_b" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="410" y="20" width="250" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-15" value="backup_b" style="points=[];aspect=fixed;html=1;align=center;shadow=0;dashed=0;image;image=img/lib/allied_telesis/computer_and_terminals/Server_Desktop.svg;" vertex="1" parent="1">
+          <mxGeometry x="499.5" y="130" width="71" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-16" value="" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="290" y="110" width="100" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-17" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=classic;html=1;entryX=0.16;entryY=0.55;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="duJ8XisY2NvJt75ONOaO-22" target="duJ8XisY2NvJt75ONOaO-16">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="220" y="255" as="sourcePoint" />
+            <mxPoint x="450" y="120" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="250" y="200" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-18" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=classic;html=1;entryX=-0.007;entryY=0.622;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.875;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="duJ8XisY2NvJt75ONOaO-16" target="duJ8XisY2NvJt75ONOaO-15">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="390" y="164.5" as="sourcePoint" />
+            <mxPoint x="506" y="80" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="460" y="166" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-19" value="backupmanager&lt;br style=&quot;font-size: 10px;&quot;&gt;instance-1" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://cdn0.iconfinder.com/data/icons/super-mono-sticker/icons/gears_sticker.png;labelPosition=center;align=center;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="50" width="64" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-22" value="backupmanager&lt;br style=&quot;font-size: 10px&quot;&gt;instance-2" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://cdn0.iconfinder.com/data/icons/super-mono-sticker/icons/gears_sticker.png;labelPosition=center;align=center;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="138.5" y="203" width="64" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="duJ8XisY2NvJt75ONOaO-25" value="" style="edgeStyle=elbowEdgeStyle;elbow=vertical;endArrow=classic;html=1;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.533;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="duJ8XisY2NvJt75ONOaO-19" target="duJ8XisY2NvJt75ONOaO-3">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="400" y="140" as="sourcePoint" />
+            <mxPoint x="450" y="90" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="30" y="170" />
+              <mxPoint x="-40" y="170" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
