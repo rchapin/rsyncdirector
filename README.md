@@ -28,7 +28,7 @@ The `rsyncdirector` listens for `SIGHUP` events and when receives one will immed
     ```
     pgrep rsyncdirector
     ```
-    
+
 1. Send the `SIGHUP`
     ```
     kill -SIGHUP <PID>
@@ -78,16 +78,17 @@ twine check dist/*
 
 #### Uploading to PyPi
 
-Generate an API token and add the requisite `[pypi]` entry to the `~/.pypirc` file
-```
-[pypi]
-username = __token__
-password = <API-token>
-```
-Then upload the artifacts to PyPi
-```
-python -m twine upload --repository pypi dist/*
-```
+1. Generate an API token and add the requisite `[pypi]` entry to the `~/.pypirc` file
+    ```
+    [pypi]
+    username = __token__
+    password = <API-token>
+    ```
+
+1. Then upload the artifacts to PyPi
+    ```
+    python -m twine upload --repository pypi dist/*
+    ```
 
 #### Uploading to Nexus
 
