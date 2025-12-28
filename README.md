@@ -20,6 +20,18 @@ See the annotated, [example config file](rsyncdirector/resources/rsyncdirector.y
 
 There is a companion program, [`rsyncdirector_deploy`](https://github.com/rchapin/rsyncdirector_deploy), to assist in the installation and deployment of configurations of `rsyncdirector`.
 
+## Forcing a Run Now
+
+The `rsyncdirector` listens for `SIGHUP` events and when receives one will immediately schedule a `run-once` execution of the configured jobs.
+1. Get the PID of the `rsyncdirector` process.  If there are multiple instances of it running you will need to adjust the way you search for the PID.
+    ```
+    pgrep rsyncdirector
+    ```
+1. Send the `SIGHUP`
+    ```
+    kill -SIGHUP <PID>
+    ```
+
 ## Key Concepts
 
 Much of the following concepts map to specific configuration parameters.
@@ -56,10 +68,26 @@ This requires a compatible version of Python in your path from which the path to
 Once that is installed, run `./run-tests.sh --dev-setup` to create a development virtual environment.
 
 ### Building a Distribution
+
 ```
 python -m build
 twine check dist/*
 ```
+
+#### Uploading to PyPi
+
+Generate an API token and add the requisite `[pypi]` entry to the `~/.pypirc` file
+```
+[pypi]
+username = __token__
+password = <API-token>
+```
+Then upload the artifacts to PyPi
+```
+python -m twine upload --repository pypi dist/*
+```
+
+#### Uploading to Nexus
 
 In my case, I have an instance of Nexus running in my network with a `~/.pypirc` file configured for it and publish the artifacts there with the following command:
 ```
