@@ -72,6 +72,10 @@ class PidFileLocal(PidFile):
     def __init__(self, logger: logging.Logger, pid: int, path: str) -> None:
         super().__init__(logger, pid, path)
 
+    def delete(self) -> bool:
+        os.remove(self.path)
+        return True
+
     def does_pid_file_exist(self) -> Tuple[bool, str]:
         path = Path(self.path)
         if path.is_dir():
@@ -95,10 +99,6 @@ class PidFileLocal(PidFile):
     def does_process_with_pid_exist(self, pid: int) -> bool:
         return psutil.pid_exists(pid)
 
-    def delete(self) -> bool:
-        os.remove(self.path)
-        return True
-
     def write(self) -> bool:
         should_write_pid = super().write()
 
@@ -116,6 +116,13 @@ class PidFileRemote(PidFile):
     def __init__(self, logger: logging.Logger, pid: int, path: str, conn: Connection) -> None:
         super().__init__(logger, pid, path)
         self.conn = conn
+
+    def delete(self) -> bool:
+        result = self.conn.run(f"rm -f {self.path}")
+        if not result.ok:
+            self.logger.fatal(f"deleting pid file; path={self.path}, result={result}")
+            sys.exit(1)
+        return True
 
     def does_pid_file_exist(self) -> Tuple[bool, str]:
         result = self.conn.run(
@@ -143,13 +150,6 @@ class PidFileRemote(PidFile):
         if not result.ok:
             # There is no process with this pid
             return False
-        return True
-
-    def delete(self) -> bool:
-        result = self.conn.run(f"rm -f {self.path}")
-        if not result.ok:
-            self.logger.fatal(f"deleting pid file; path={self.path}, result={result}")
-            sys.exit(1)
         return True
 
     def write(self) -> bool:
