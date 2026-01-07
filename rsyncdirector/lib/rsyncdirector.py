@@ -251,6 +251,27 @@ class RsyncDirector(Thread):
     def __get_pid_file_name(id: str) -> str:
         return f"rsyncdirector-{id}.pid"
 
+    def __get_process_command(self, action: Dict) -> multiprocessing.Process:
+        return multiprocessing.Process(
+            target=RsyncDirector.__exec_process_command,
+            args=(self.logger, action["command"], action["args"]),
+        )
+
+    def __get_process_rsync(self, job: Dict, action: Dict) -> multiprocessing.Process:
+        sync = {
+            "source": action["source"],
+            "dest": action["dest"],
+            "opts": action["opts"],
+        }
+        return multiprocessing.Process(
+            target=RsyncDirector.__exec_process_rsync,
+            args=(
+                self.logger,
+                job,
+                sync,
+            ),
+        )
+
     def __is_blocked_local(blocks_on_conf: Dict, logger: logging.Logger) -> bool:
         path = blocks_on_conf["path"]
         if os.path.exists(path):
@@ -369,31 +390,6 @@ class RsyncDirector(Thread):
             finally:
                 if conn is not None:
                     conn.close()
-
-    def __get_process_command(self, action: Dict) -> multiprocessing.Process:
-        return multiprocessing.Process(
-            target=RsyncDirector.__exec_process_command,
-            args=(
-                self.logger,
-                action["command"],
-                action["args"]
-            ),
-        )
-
-    def __get_process_rsync(self, job: Dict, action: Dict) -> multiprocessing.Process:
-        sync = {
-            "source": action["source"],
-            "dest": action["dest"],
-            "opts": action["opts"],
-        }
-        return multiprocessing.Process(
-            target=RsyncDirector.__exec_process_rsync,
-            args=(
-                self.logger,
-                job,
-                sync,
-            ),
-        )
 
     def __run_job(self, job):
         job_id = job["id"]
