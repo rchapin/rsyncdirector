@@ -74,6 +74,27 @@ class BlocksOnRemote(BlocksOn, RemoteHost):
 
 
 @dataclass
+class Action(JSONWizard):
+    class _(JSONWizard.Meta):
+        key_transform_with_dump = "SNAKE"
+
+    action: str
+
+
+@dataclass
+class SyncAction(Action):
+    source: str
+    dest: str
+    opts: List[str]
+
+
+@dataclass
+class CommandAction(Action):
+    command: string
+    args: List[str]
+
+
+@dataclass
 class Sync(JSONWizard):
     source: str
     dest: str
@@ -88,8 +109,8 @@ class Job(JSONWizard):
     id: str
     type: str
     lock_files: List[LockFile]
-    syncs: List[Sync]
     blocks_on: List[BlocksOn]
+    actions: List[Action]
 
 
 @dataclass
@@ -210,7 +231,7 @@ class IntegrationTestUtils(object):
                                     path=os.path.join(test_configs.lock_dir, "lock_file"),
                                 ),
                             ],
-                            syncs=None,
+                            actions=None,
                             blocks_on=None,
                         )
                     ],
@@ -234,7 +255,7 @@ class IntegrationTestUtils(object):
                                     path=os.path.join(test_configs.lock_dir, "lock_file"),
                                 ),
                             ],
-                            syncs=None,
+                            actions=None,
                             blocks_on=None,
                         )
                     ],

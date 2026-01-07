@@ -38,9 +38,11 @@ jobs:
   # Example of a job that rsyncs to the localhost.
   - id: local_rsync
     type: local
-    # List of source:dest dirs/files to rsync
-    syncs:
-      - source: /source/path
+    # List of actions to be serially executed.  Current types are [sync|command]
+    actions:
+      # A 'sync' action with a list of source:dest dirs/files to rsync
+      - action: sync
+        source: /source/path
         dest: /path/on/local/host
         # Any arbitrary rsync options supported by the underlying rsync installation.
         opts:
@@ -49,7 +51,8 @@ jobs:
           - "--exclude '.cache'"
           - "--exclude 'Downloads'"
 
-  # Example of a job that rsyncs from the localhost to a remote host.
+  # Example of a job that defined syncs from the localhost to a remote host and includes interspersed
+  # commands.
   - id: local_desktop_to_backup_a
     type: remote
     # The user that we will use to make the rsync connection to the dest host.
@@ -99,12 +102,30 @@ jobs:
         path: /lockfile/on/localhost
         wait_time: 300
 
-    # List of source:dest dirs/files to rsync
-    syncs:
-      - source: /source/path
+    # List of actions.
+    actions:
+      # A 'sync' that writes to the remote host
+      - action: sync
+        source: /source/path
         dest: /path/on/remote/host
         opts:
           - "-av"
           - "--delete"
           - "--exclude '.cache'"
           - "--exclude 'Downloads'"
+      # A command executed on the local host.  For the time-being, commands are only enabled to run
+      # on the host on which rsyncdirector is running as the rsyncdirector user.
+      - action: command
+        command: /path/to/some/command.sh
+        args:
+          - "--arg1"
+          - "arg1_val"
+          - "--arg2"
+          - "arg2_val"
+      # Another sync that will occurr AFTER the previous command has successfully completed.
+      - action: sync
+        source: /source/some/other/path
+        dest: /some/other/path/on/remote/host
+        opts:
+          - "-avi"
+          - "--delete"

@@ -13,13 +13,15 @@ from typing import List
 from rsyncdirector.integration_tests.it_base import ITBase, ExpectedData, ExpectedDir, ExpectedFile
 from rsyncdirector.integration_tests.int_test_utils import (
     IntegrationTestUtils,
-    AppConfigs,
     ContainerType,
     Job,
     LockFile,
     RemoteLockFile,
     BlocksOn,
     BlocksOnRemote,
+    Action,
+    SyncAction,
+    CommandAction,
     Sync,
     RSYNC_ID_DEFAULT,
 )
@@ -141,8 +143,9 @@ class ITRsyncDirector(ITBase):
 
         app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
         job = app_configs.jobs[0]
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=d1,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -163,12 +166,13 @@ class ITRsyncDirector(ITBase):
 
         app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
         job = app_configs.jobs[0]
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=source_data_dir,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
-            ),
+            )
         ]
 
         IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
@@ -824,9 +828,7 @@ class ITRsyncDirector(ITBase):
         rsyncdirector = self.run_rsyncdirector()
 
         metrics_conditions = MetricsConditions(
-            metrics=[
-                Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)
-            ]
+            metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)]
         )
         WaitFor.metrics(
             logger=logger,
@@ -861,4 +863,28 @@ class ITRsyncDirector(ITBase):
 
         rsyncdirector.join(timeout=5.0)
         self.validate_post_conditions(expected_data)
+        IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)
+
+    def test_run_command(self):
+        job_type = JobType.LOCAL
+        IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
+
+        app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
+        job = app_configs.jobs[0]
+        job.actions = [
+            CommandAction(
+                action="command",
+                command="ls",
+                args=[
+                    "-al",
+                    "/var/tmp/"
+                ],
+            )
+        ]
+
+        IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
+
+        rsyncdirector = self.run_rsyncdirector()
+        rsyncdirector.join(timeout=5.0)
+        # self.validate_post_conditions(expected_data)
         IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)

@@ -1,5 +1,4 @@
 import logging
-import sys
 from dataclasses import dataclass, field
 from rsyncdirector.lib.config import JobType
 from invoke import run

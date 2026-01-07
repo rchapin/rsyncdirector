@@ -13,6 +13,7 @@ from rsyncdirector.lib.config import BlocksOnType, LockFileType
 from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
 from rsyncdirector.lib.rsync import Rsync
+from rsyncdirector.lib.command import Command
 from rsyncdirector.lib.metrics import (
     Metrics,
     BLOCKED_COUNTER,
@@ -208,7 +209,12 @@ class RsyncDirector(Thread):
         RUNS_COMPLETED.labels(self.rsync_id).inc()
 
     @staticmethod
-    def __exec_process(logger, job, sync):
+    def __exec_process_command(logger, command: str, args: List[str]) -> None:
+        command = Command(logger, command, args)
+        command.run()
+
+    @staticmethod
+    def __exec_process_rsync(logger, job: Dict, sync: Dict) -> None:
         user = job["user"] if "user" in job else None
         host = job["host"] if "host" in job else None
         port = job["port"] if "port" in job else None
@@ -364,6 +370,31 @@ class RsyncDirector(Thread):
                 if conn is not None:
                     conn.close()
 
+    def __get_process_command(self, action: Dict) -> multiprocessing.Process:
+        return multiprocessing.Process(
+            target=RsyncDirector.__exec_process_command,
+            args=(
+                self.logger,
+                action["command"],
+                action["args"]
+            ),
+        )
+
+    def __get_process_rsync(self, job: Dict, action: Dict) -> multiprocessing.Process:
+        sync = {
+            "source": action["source"],
+            "dest": action["dest"],
+            "opts": action["opts"],
+        }
+        return multiprocessing.Process(
+            target=RsyncDirector.__exec_process_rsync,
+            args=(
+                self.logger,
+                job,
+                sync,
+            ),
+        )
+
     def __run_job(self, job):
         job_id = job["id"]
         if "blocks_on" in job:
@@ -382,25 +413,29 @@ class RsyncDirector(Thread):
             if has_lock_files:
                 self.__lock_files(job["id"], job["lock_files"], LockFileAction.WRITE)
 
-            self.logger.info(f"Executing syncs for job; job={job}")
-            for sync in job["syncs"]:
+            self.logger.info(f"Executing actions for job; job={job}")
+            if "actions" not in job:
+                raise Exception(f"no actions defined in job; job={job}")
+
+            for action in job["actions"]:
                 if self.is_shutdown():
                     self.logger.info(
-                        f"We have been shutdown, exiting __run_job, sync execution loop"
+                        f"We have been shutdown, exiting __run_job, action execution loop"
                     )
                     break
 
-                # We run the rsync command in a separate process altogether so that we can kill it
+                # We run the action commands in a separate process altogether so that we can kill it
                 # if we need to.
-                self.logger.info(f"Executing sync; sync={sync}")
-                self.process = multiprocessing.Process(
-                    target=RsyncDirector.__exec_process,
-                    args=(
-                        self.logger,
-                        job,
-                        sync,
-                    ),
-                )
+                match action["action"]:
+                    case "sync":
+                        self.process = self.__get_process_rsync(job, action)
+                    case "command":
+                        self.process = self.__get_process_command(action)
+                        pass
+                    case _:
+                        self.logger.fatal(f"Unknown acton; action={action["action"]}")
+                        sys.exit(1)
+
                 try:
                     self.process.start()
                     self.process.join()
