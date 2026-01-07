@@ -95,13 +95,6 @@ class CommandAction(Action):
 
 
 @dataclass
-class Sync(JSONWizard):
-    source: str
-    dest: str
-    opts: List[str]
-
-
-@dataclass
 class Job(JSONWizard):
     class _(JSONWizard.Meta):
         key_transform_with_dump = "SNAKE"

@@ -9,7 +9,6 @@ import os
 import sys
 import rsyncdirector.lib.config as cfg
 from datetime import timedelta
-from typing import List
 from rsyncdirector.integration_tests.it_base import ITBase, ExpectedData, ExpectedDir, ExpectedFile
 from rsyncdirector.integration_tests.int_test_utils import (
     IntegrationTestUtils,
@@ -19,10 +18,8 @@ from rsyncdirector.integration_tests.int_test_utils import (
     RemoteLockFile,
     BlocksOn,
     BlocksOnRemote,
-    Action,
     SyncAction,
     CommandAction,
-    Sync,
     RSYNC_ID_DEFAULT,
 )
 from rsyncdirector.integration_tests.metrics_scraper import (
@@ -108,12 +105,13 @@ class ITRsyncDirector(ITBase):
 
         app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
         job = app_configs.jobs[0]
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=d1,
                 dest="/data",
                 opts=["-av", "--delete"],
-            ),
+            )
         ]
 
         IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
@@ -211,8 +209,9 @@ class ITRsyncDirector(ITBase):
 
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
-            job.syncs = [
-                Sync(
+            job.actions = [
+                SyncAction(
+                    action="sync",
                     source=d1,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -276,12 +275,13 @@ class ITRsyncDirector(ITBase):
 
         app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
         job = app_configs.jobs[0]
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
-            ),
+            )
         ]
         job.blocks_on = [
             BlocksOn(
@@ -345,12 +345,13 @@ class ITRsyncDirector(ITBase):
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
             job.id = job_id
-            job.syncs = [
-                Sync(
+            job.actions = [
+                SyncAction(
+                    action="sync",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
-                ),
+                )
             ]
             job.blocks_on = [
                 BlocksOnRemote(
@@ -461,12 +462,13 @@ class ITRsyncDirector(ITBase):
                     private_key_path=self.test_configs.ssh_identity_file,
                 ),
             ]
-            job.syncs = [
-                Sync(
+            job.actions = [
+                SyncAction(
+                    action="sync",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete", "--bwlimit=2"],
-                ),
+                )
             ]
             job.blocks_on = [
                 BlocksOn(
@@ -543,12 +545,13 @@ class ITRsyncDirector(ITBase):
         )
         job = app_configs.jobs[0]
         job.id = job_id
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=source_data_dir,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
-            ),
+            )
         ]
 
         IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
@@ -598,8 +601,9 @@ class ITRsyncDirector(ITBase):
         )
         job1 = app_configs.jobs[0]
         job1.id = job_id_1
-        job1.syncs = [
-            Sync(
+        job1.actions = [
+            SyncAction(
+                action="sync",
                 source=source_data_dir_data1,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
@@ -616,8 +620,9 @@ class ITRsyncDirector(ITBase):
                         path=os.path.join(self.test_configs.lock_dir, "lock_file_2"),
                     ),
                 ],
-                syncs=[
-                    Sync(
+                actions=[
+                    SyncAction(
+                        action="sync",
                         source=source_data_dir_data2,
                         dest=self.test_configs.test_local_sync_target_dir,
                         opts=["-av", "--delete"],
@@ -658,8 +663,9 @@ class ITRsyncDirector(ITBase):
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
             job.id = "interruptable_wait"
-            job.syncs = [
-                Sync(
+            job.actions = [
+                SyncAction(
+                    action="sync",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -733,8 +739,9 @@ class ITRsyncDirector(ITBase):
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
             job.id = job_id
-            job.syncs = [
-                Sync(
+            job.actions= [
+                SyncAction(
+                    action="sync",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -803,8 +810,9 @@ class ITRsyncDirector(ITBase):
         job_id = "locks_and_blocks_on_same_file"
         job = app_configs.jobs[0]
         job.id = job_id
-        job.syncs = [
-            Sync(
+        job.actions = [
+            SyncAction(
+                action="sync",
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -875,10 +883,7 @@ class ITRsyncDirector(ITBase):
             CommandAction(
                 action="command",
                 command="ls",
-                args=[
-                    "-al",
-                    "/var/tmp/"
-                ],
+                args=["-al", "/var/tmp/"],
             )
         ]
 
