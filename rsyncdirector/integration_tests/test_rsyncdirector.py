@@ -739,7 +739,7 @@ class ITRsyncDirector(ITBase):
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
             job.id = job_id
-            job.actions= [
+            job.actions = [
                 SyncAction(
                     action="sync",
                     source=source_data_dir,
@@ -873,23 +873,76 @@ class ITRsyncDirector(ITBase):
         self.validate_post_conditions(expected_data)
         IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)
 
-    def test_run_command(self):
-        job_type = JobType.LOCAL
+    def test_run_sync_and_command_actions(self):
+        """
+        Tests that we can intersperse running commands with syncs.
+        """
+        job_type = JobType.REMOTE
         IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
+        expected_data, source_data_dir = self.get_default_test_data(job_type)
+
+        ssh_args = [
+            "-p",
+            self.test_configs.container_target_port,
+            "-i",
+            self.test_configs.ssh_identity_file,
+            f"root@{self.test_configs.test_host}",
+        ]
+        mkdir_args = [*ssh_args, "mkdir", "/tarballs"]
+        tar_args = [*ssh_args, "tar", "-czvf", "/tarballs/data.tar.gz", "/data"]
 
         app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
         job = app_configs.jobs[0]
         job.actions = [
+            # First, execute a sync action to rsync data to the remote host.
+            SyncAction(
+                action="sync",
+                source=source_data_dir,
+                dest="/data",
+                opts=["-av", "--delete"],
+            ),
+            # Then run a command to ssh to the host and create a tarball directory.
             CommandAction(
                 action="command",
-                command="ls",
-                args=["-al", "/var/tmp/"],
-            )
+                command="ssh",
+                args=mkdir_args,
+            ),
+            # Then run a command to ssh to the host and tar up the data directory into the newly
+            # created tarball dir.
+            CommandAction(
+                action="command",
+                command="ssh",
+                args=tar_args,
+            ),
         ]
 
         IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
 
         rsyncdirector = self.run_rsyncdirector()
         rsyncdirector.join(timeout=5.0)
-        # self.validate_post_conditions(expected_data)
+        self.validate_post_conditions(expected_data)
+
+        # Verify that the tarball was created in the expected new directory.
+        conn = None
+        try:
+            conn = IntegrationTestUtils.get_test_docker_conn(
+                self.test_configs, ContainerType.TARGET
+            )
+            cmd = "stat /tarballs/data.tar.gz"
+            result = conn.run(cmd)
+            if result.ok:
+                for line in result.stdout.strip().split("\n"):
+                    if "Size:" in line:
+                        tokens = line.split()
+                        self.assertTrue(len(tokens) >= 2)
+                        self.assertEqual("Size:", tokens[0])
+                        self.assertFalse("", tokens[1])
+                        bytes = int(tokens[1])
+                        self.assertTrue(bytes > 0)
+            else:
+                self.fail(f"error running command; cmd={cmd}, result={result}")
+        finally:
+            if conn:
+                conn.close()
+
         IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)

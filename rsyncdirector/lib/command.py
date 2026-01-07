@@ -12,4 +12,5 @@ class Command(object):
     def run(self) -> None:
         args = " ".join(self.args)
         cmd = f"{self.command} {args}"
+        self.logger.info(f"running command; cmd={cmd}")
         run(cmd)

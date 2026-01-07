@@ -40,5 +40,5 @@ class Rsync(object):
 
         opts = " ".join(options)
         cmd = f"rsync {opts} {self.sync['source']} {remote_prefix}{self.sync['dest']}"
-        self.logger.info(f"running rsync; cmd={cmd}")
+        self.logger.info(f"running sync; cmd={cmd}")
         run(cmd)
