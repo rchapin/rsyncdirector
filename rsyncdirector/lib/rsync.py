@@ -2,10 +2,20 @@ import logging
 from dataclasses import dataclass, field
 from rsyncdirector.lib.config import JobType
 from invoke import run
+from typing import Dict
 
 
 class Rsync(object):
-    def __init__(self, logger, type, sync, user=None, host=None, port=None, private_key_path=None):
+    def __init__(
+        self,
+        logger: logging.Logger,
+        type: JobType,
+        sync: Dict,
+        user: str = None,
+        host: str = None,
+        port: str = None,
+        private_key_path: str = None,
+    ):
         self.logger = logger
         self.type = type
         self.sync = sync
