@@ -146,12 +146,12 @@ class ITBase(unittest.TestCase):
 
                     def list_sub_dirs(path: str) -> List[str]:
                         p = Path(path)
-                        retval = [entry.name for entry in path.iterdir() if entry.is_dir()]
+                        retval = [entry.name for entry in p.iterdir() if entry.is_dir()]
                         return retval
 
                     def find_files(path: str) -> List[str]:
                         p = Path(path)
-                        retval = [entry.name for entry in path.iterdir() if entry.is_file()]
+                        retval = [entry.name for entry in p.iterdir() if entry.is_file()]
                         return retval
 
                 case JobType.REMOTE:

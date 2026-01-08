@@ -42,6 +42,8 @@ jobs:
     actions:
       # A 'sync' action with a list of source:dest dirs/files to rsync
       - action: sync
+        # An arbitrary string to describe/distinguish the action.
+        id: sync-of-source-path
         source: /source/path
         dest: /path/on/local/host
         # Any arbitrary rsync options supported by the underlying rsync installation.
@@ -106,6 +108,7 @@ jobs:
     actions:
       # A 'sync' that writes to the remote host
       - action: sync
+        id: sync-of-source-path
         source: /source/path
         dest: /path/on/remote/host
         opts:
@@ -116,6 +119,7 @@ jobs:
       # A command executed on the local host.  For the time-being, commands are only enabled to run
       # on the host on which rsyncdirector is running as the rsyncdirector user.
       - action: command
+        id: command.sh
         command: /path/to/some/command.sh
         args:
           - "--arg1"
@@ -124,6 +128,7 @@ jobs:
           - "arg2_val"
       # Another sync that will occurr AFTER the previous command has successfully completed.
       - action: sync
+        id: sync-some-other-path
         source: /source/some/other/path
         dest: /some/other/path/on/remote/host
         opts:

@@ -79,6 +79,7 @@ class Action(JSONWizard):
         key_transform_with_dump = "SNAKE"
 
     action: str
+    id: str
 
 
 @dataclass

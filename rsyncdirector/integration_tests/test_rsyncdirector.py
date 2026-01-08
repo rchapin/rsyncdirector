@@ -29,7 +29,6 @@ from rsyncdirector.integration_tests.metrics_scraper import (
     MetricsConditions,
     WaitFor,
 )
-from rsyncdirector.integration_tests.int_test_utils import AppConfigs
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
 from rsyncdirector.lib.config import JobType
 
@@ -81,6 +80,13 @@ class ITRsyncDirector(ITBase):
         return rsyncdirector
 
     def test_will_shutdown_when_finding_an_existing_pid_file_that_is_not_our_pid(self):
+
+        s = "\t\n@#$%^&*()ljsdf823_ljsdf?<"
+        # s = "".join(c for c in s if c.isalnum() else "_")
+        s = "".join(c for c in s if c.isalnum())
+        pass
+
+
         """
         Tests that we will shutdown without executing any commands when we find an existing pid file
         that does not contain our pid.
@@ -108,6 +114,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{d1}",
                 source=d1,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -144,6 +151,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{d1}",
                 source=d1,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -167,6 +175,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of{source_data_dir}",
                 source=source_data_dir,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
@@ -212,6 +221,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
+                    id="sync-of-{d1}",
                     source=d1,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -278,6 +288,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -348,6 +359,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
+                    id=f"sync of {source_data_dir}",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -465,6 +477,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
+                    id=f"sync-of-{source_data_dir}",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete", "--bwlimit=2"],
@@ -548,6 +561,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
@@ -604,6 +618,7 @@ class ITRsyncDirector(ITBase):
         job1.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{source_data_dir_data1}",
                 source=source_data_dir_data1,
                 dest=self.test_configs.test_local_sync_target_dir,
                 opts=["-av", "--delete"],
@@ -623,6 +638,7 @@ class ITRsyncDirector(ITBase):
                 actions=[
                     SyncAction(
                         action="sync",
+                        id=f"sync-of-{source_data_dir_data2}",
                         source=source_data_dir_data2,
                         dest=self.test_configs.test_local_sync_target_dir,
                         opts=["-av", "--delete"],
@@ -666,6 +682,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
+                    id=f"sync-of-{source_data_dir}",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -742,6 +759,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
+                    id=f"sync-of-{source_data_dir}",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -813,6 +831,7 @@ class ITRsyncDirector(ITBase):
         job.actions = [
             SyncAction(
                 action="sync",
+                id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -867,7 +886,6 @@ class ITRsyncDirector(ITBase):
             timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
             poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
         )
-        # logger.info("verified metrics for the lock file")
 
         rsyncdirector.join(timeout=5.0)
         self.validate_post_conditions(expected_data)
@@ -897,6 +915,7 @@ class ITRsyncDirector(ITBase):
             # First, execute a sync action to rsync data to the remote host.
             SyncAction(
                 action="sync",
+                id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
@@ -904,6 +923,7 @@ class ITRsyncDirector(ITBase):
             # Then run a command to ssh to the host and create a tarball directory.
             CommandAction(
                 action="command",
+                id="create-remote-tarball-dir",
                 command="ssh",
                 args=mkdir_args,
             ),
@@ -911,6 +931,7 @@ class ITRsyncDirector(ITBase):
             # created tarball dir.
             CommandAction(
                 action="command",
+                id="create-remote-tarball",
                 command="ssh",
                 args=tar_args,
             ),
@@ -945,4 +966,39 @@ class ITRsyncDirector(ITBase):
             if conn:
                 conn.close()
 
+        IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)
+
+    def test_failed_action_aborts_job(self):
+        job_type = JobType.LOCAL
+        IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
+        dest_dir = self.test_configs.test_local_sync_target_dir
+        _, source_data_dir = self.get_default_test_data(job_type)
+        # We don't expect anything to have been written into the destination dir so we define
+        # ExpectedData specifying the path of the directory we expect to be empty.
+        expected_data = ExpectedData(job_type)
+        expected_data.dirs.append(ExpectedDir(path=dest_dir))
+
+        app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
+        job = app_configs.jobs[0]
+        job.actions = [
+            CommandAction(
+                action="command",
+                id="bogus-command",
+                command="completely-bogus-command",
+                args=["this", "will", "error", "out"],
+            ),
+            SyncAction(
+                action="sync",
+                id=f"sync-of-{source_data_dir}",
+                source=source_data_dir,
+                dest=self.test_configs.test_local_sync_target_dir,
+                opts=["-av", "--delete"],
+            ),
+        ]
+
+        IntegrationTestUtils.write_app_configs(self.test_configs, app_configs)
+
+        rsyncdirector = self.run_rsyncdirector()
+        rsyncdirector.join(timeout=5.0)
+        self.validate_post_conditions(expected_data)
         IntegrationTestUtils.unset_env_vars(RUNONCE_ENV_VAR)

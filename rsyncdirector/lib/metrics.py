@@ -41,6 +41,24 @@ JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER = Counter(
     labelnames=["job_id"],
 )
 
+JOB_ABORTED_FOR_FAILED_PROCESS_ERR = Counter(
+    "job_aborted_for_failed_process_err",
+    "Number of times a job is aborted because of a failed process",
+    labelnames=["job_id", "action_id"],
+)
+
+JOB_ABORTED_FOR_FAILED_ACTION_ERR = Counter(
+    "job_aborted_for_failed_action_err",
+    "Number of times a job is aborted because of a failed command",
+    labelnames=["job_id", "action_id"],
+)
+
+JOB_ABORTED_FOR_EXCEPTION_ERR = Counter(
+    "job_aborted_for_exception_err",
+    "Number of times a job is aborted because of an exception thrown by running the command",
+    labelnames=["job_id", "action_id"],
+)
+
 BLOCKED_COUNTER = Counter("blocked", "Number of times a job is blocked", labelnames=["job_id"])
 
 BLOCKED_DURATION = Histogram(
