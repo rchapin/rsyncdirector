@@ -1,12 +1,23 @@
 import logging
 import requests
 import socket
+import string
 import subprocess
 import time
 from typing import Tuple
 
 
 class Utils(object):
+
+    _PUNCT_MAP = {char: "_" for char in string.punctuation}
+    _WHITESPACE_MAP = {char: "-" for char in string.whitespace}
+
+    # Merge mappings and create the official translation table
+    TRANS_TABLE = str.maketrans({**_PUNCT_MAP, **_WHITESPACE_MAP})
+
+    @staticmethod
+    def remove_whitespace_and_special_chars(input: str) -> str:
+        return input.translate(Utils.TRANS_TABLE)
 
     @staticmethod
     def run_bash_cmd(cmd: str, timeout_seconds: int = None) -> Tuple[int, str, str]:
