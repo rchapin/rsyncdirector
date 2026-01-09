@@ -16,6 +16,8 @@ For example:  Every 24 hours `rsyncdirector` runs on `laptop01` backing up data 
 
 Each instance can be configured to run under any arbitrary user and connect to any remote host that it can reach with the supplied credentials.  The user under which it runs must have read permissions for the files that it is configured to `rsync`.  The administrator must distribute public SSH keys to the hosts to which data is to be `rsync`ed and can optionally specify a private key other than the `rsyncdirector` user's default set of private keys.
 
+`rsyncdirector` can also run arbitrary `command` actions interspersed between `sync` actions to enable dumping of databases, or any other command to be run.
+
 See the annotated, [example config file](rsyncdirector/resources/rsyncdirector.yaml) for details on how to configure an instance of `rsyncdirector`.
 
 There is a companion program, [`rsyncdirector_deploy`](https://github.com/rchapin/rsyncdirector_deploy), to assist in the installation and deployment of configurations of `rsyncdirector`.
@@ -42,10 +44,16 @@ Much of the following concepts map to specific configuration parameters.
 Each `rsyncdirector` instance requires defining a peridocity for which it will run by defining a cron expression in the config which uses the same syntax as a standard Linux cron job.
 
 ### job
-Each job encapsulates n number of `rsync` commands that either sync data between directories on the localhost or sync data to a single remote host.  The job defines the specifics for connecting to a remote host if the job type is `remote`.
+Each job encapsulates n number of `actions`; either a `sync` or a `command`.  The job defines the specifics for connecting to a remote host for `sync` actions if the job type is `remote`.
 
-### syncs
-`syncs` define the specific `rsync` command to be run.  Each "inherits" the definitions of the job to enable the concatenation of the `rsync` command to include the specified user, host, and port information for `remote` jobs.  The `source` and `dest` are self-explanatory, and the `opts` list enables the inclusion of any arbitrary options that  the undelying `rsync` implementation on the host allows.
+ which either rsyncs data between directories on the localhost or data to a single remote host.  The job defines the specifics for connecting to a remote host for `sync` actions if the job type is `remote`.
+
+### actions
+Each job
+An action is
+
+#### sync
+A `sync` `action` defines the specific `rsync` command to be run.  Each "inherits" the definitions of the job to enable the concatenation of the `rsync` command to include the specified user, host, and port information for `remote` jobs.  The `source` and `dest` are self-explanatory, and the `opts` list enables the inclusion of any arbitrary options that  the undelying `rsync` implementation on the host allows.
 
 ### lock_files
 `lock_files` define an arbitrary number of files that will be created on either the localhost or remote host(s) to signal to other `rsyncdirector` instances that a given instance is running.
