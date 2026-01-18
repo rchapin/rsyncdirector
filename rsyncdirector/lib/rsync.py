@@ -13,10 +13,10 @@ class Rsync(object):
         result_queue: multiprocessing.Queue,
         type: JobType,
         sync: Dict,
-        user: str = None,
-        host: str = None,
-        port: str = None,
-        private_key_path: str = None,
+        user: str | None = None,
+        host: str | None = None,
+        port: str | None = None,
+        private_key_path: str | None = None,
     ):
         self.logger = logger
         self.result_queue = result_queue
@@ -55,7 +55,7 @@ class Rsync(object):
         cmd = f"rsync {opts} {self.sync['source']} {remote_prefix}{self.sync['dest']}"
         self.logger.info(f"running sync; cmd={cmd}")
         result = run(cmd, warn=True)
-        run_result = RunResult.SUCCESS
-        if result.failed:
-            run_result = RunResult.FAIL
+        run_result = RunResult.FAIL
+        if result and result.ok:
+            run_result = RunResult.SUCCESS
         self.result_queue.put((run_result, result))

@@ -12,7 +12,6 @@ import rsyncdirector.lib.config as cfg
 import shutil
 import sys
 from dataclasses import dataclass
-from fabric import Connection
 from pathlib import Path
 from typing import Callable, Dict, List, Set, Tuple
 from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType

@@ -4,7 +4,7 @@ Automate and coordinate the running of `rsync` jobs on multiple Linux hosts with
 
 ## Overview
 
-`rsyncdirector` enables multiple `rsync` jobs, running locally or remotely, to synchronize on lock files, local or remote, to ensure that data is only mutated by one `rsync` process at a time.
+`rsyncdirector` enables multiple `rsync` jobs, running locally or remotely, to synchronize on lock files, local or remote, to ensure that data is only mutated by one `rsync` process at a time.  Arbitrary commands can also be interspersed between `sync` `actions`.
 
 For example:  Every 24 hours `rsyncdirector` runs on `laptop01` backing up data to a `backup01`.  Both machines are in the same physical location.  Every 7 days an instance of `rsyncdirector` on `backup01` `rsync`s all of its data to `backup-remote` which is at a remote site.  Before the instance of `rsyncdirector` on `laptop01` starts syncing data to `backup01` it checks to see if a lockfile exists in a predefined location on `backup01`.  If it exists, it indicates that `backup01` is currently syncing data and the `laptop01` `rsyncdirector` waits a configured amount of time and then re-checks, until the lock file no longer exists, or a configured timeout exipres.  Once the `laptop01` `rsyncdirector` sees that the lockfile on `backup01` is gone, it writes a lockfile to `backup01` and starts `rsync`ing data from itself to `backup01`.  In this way, multiple `rsyncdirector` instances can be run across multiple hosts and coordinate so that data is not mutated at the same time.
 

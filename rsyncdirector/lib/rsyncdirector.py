@@ -206,8 +206,8 @@ class RsyncDirector(Thread):
     def __exec_process_command(
         logger: logging.Logger, result_queue: multiprocessing.Queue, command: str, args: List[str]
     ) -> None:
-        command = Command(logger, result_queue, command, args)
-        command.run()
+        cmd = Command(logger, result_queue, command, args)
+        cmd.run()
 
     @staticmethod
     def __exec_process_rsync(
@@ -253,13 +253,14 @@ class RsyncDirector(Thread):
         self, action: Dict
     ) -> Tuple[multiprocessing.Process, multiprocessing.Queue]:
         result_queue = multiprocessing.Queue()
+        args = action["args"] if "args" in action else None
         process = multiprocessing.Process(
             target=RsyncDirector.__exec_process_command,
             args=(
                 self.logger,
                 result_queue,
                 action["command"],
-                action["args"],
+                args,
             ),
         )
         return process, result_queue

@@ -11,7 +11,7 @@ class Command(object):
         logger: logging.Logger,
         result_queue: multiprocessing.Queue,
         command: str,
-        args: List[str],
+        args: List[str] | None = None,
     ):
         self.logger = logger
         self.result_queue = result_queue
@@ -19,11 +19,11 @@ class Command(object):
         self.args = args
 
     def run(self) -> None:
-        args = " ".join(self.args)
-        cmd = f"{self.command} {args}"
+        args = " ".join(self.args) if self.args else None
+        cmd = f"{self.command} {args}" if args else self.command
         self.logger.info(f"running command; cmd={cmd}")
         result = run(cmd, warn=True)
-        run_result = RunResult.SUCCESS
-        if result.failed:
-            run_result = RunResult.FAIL
+        run_result = RunResult.FAIL
+        if result and result.ok:
+            run_result = RunResult.SUCCESS
         self.result_queue.put((run_result, result))

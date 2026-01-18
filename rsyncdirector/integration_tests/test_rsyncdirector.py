@@ -6,6 +6,7 @@
 
 import logging
 import os
+import stat
 import sys
 import rsyncdirector.lib.config as cfg
 from datetime import timedelta
@@ -31,6 +32,7 @@ from rsyncdirector.integration_tests.metrics_scraper import (
 )
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
 from rsyncdirector.lib.config import JobType
+from typing import Sequence
 
 logging.basicConfig(
     format="%(asctime)s,%(levelname)s,%(module)s,%(message)s", level=logging.INFO, stream=sys.stdout
@@ -39,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 RUNONCE_ENV_VAR_KEY = f"{cfg.ENV_VAR_PREFIX}_{cfg.ENV_VAR_RUNONCE}"
 RUNONCE_ENV_VAR = {RUNONCE_ENV_VAR_KEY: "1"}
+
+TEST_SHELL_SCRIPT = """#!/bin/bash
+df
+ls -al /var/tmp/
+"""
 
 
 class ITRsyncDirector(ITBase):
@@ -85,7 +92,6 @@ class ITRsyncDirector(ITBase):
         # s = "".join(c for c in s if c.isalnum() else "_")
         s = "".join(c for c in s if c.isalnum())
         pass
-
 
         """
         Tests that we will shutdown without executing any commands when we find an existing pid file
@@ -893,11 +899,20 @@ class ITRsyncDirector(ITBase):
 
     def test_run_sync_and_command_actions(self):
         """
-        Tests that we can intersperse running commands with syncs.
+        Tests that we can intersperse running commands with syncs and run commands of different
+        types.
         """
         job_type = JobType.REMOTE
         IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
         expected_data, source_data_dir = self.get_default_test_data(job_type)
+
+        # A shell script that we will call that runs a few commands.
+        test_shell_script_path = os.path.join(self.test_configs.config_dir, "test.sh")
+        with open(test_shell_script_path, "w") as fh:
+            fh.write(TEST_SHELL_SCRIPT)
+        current_mode = os.stat(test_shell_script_path).st_mode
+        updated_mode = current_mode | stat.S_IXUSR
+        os.chmod(test_shell_script_path, updated_mode)
 
         ssh_args = [
             "-p",
@@ -919,6 +934,18 @@ class ITRsyncDirector(ITBase):
                 source=source_data_dir,
                 dest="/data",
                 opts=["-av", "--delete"],
+            ),
+            # Run a command, calling a shell script with no arguments to test that we can omit the "args" key.
+            CommandAction(
+                action="command",
+                id="df",
+                command=test_shell_script_path,
+            ),
+            # Run a single command.
+            CommandAction(
+                action="command",
+                id="df",
+                command="df",
             ),
             # Then run a command to ssh to the host and create a tarball directory.
             CommandAction(

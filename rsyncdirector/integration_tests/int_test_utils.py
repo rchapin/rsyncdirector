@@ -10,7 +10,7 @@ from dataclass_wizard import JSONWizard, YAMLWizard
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from fabric import Connection
-from typing import List, Optional
+from typing import List, Optional, Sequence
 import docker
 import logging
 import os
@@ -91,8 +91,8 @@ class SyncAction(Action):
 
 @dataclass
 class CommandAction(Action):
-    command: string
-    args: List[str]
+    command: str
+    args: Optional[List[str]]=None
 
 
 @dataclass
@@ -104,7 +104,7 @@ class Job(JSONWizard):
     type: str
     lock_files: List[LockFile]
     blocks_on: List[BlocksOn]
-    actions: List[Action]
+    actions: Sequence[Action]
 
 
 @dataclass
@@ -129,7 +129,7 @@ class AppConfigs(JSONWizard):
     rsync_id: str
     cron_schedule: str
     pid_file_dir: str
-    jobs: List[Job]
+    jobs: Sequence[Job]
     metrics: Optional[Metrics] = None
 
 
@@ -383,7 +383,6 @@ class IntegrationTestUtils(object):
                         container_name, client
                     )
                     if is_running:
-                        WAIT_FOR_DOCKER_SSH_SLEEP_TIME
                         logger.info(
                             f"Test docker container is not yet stopped, "
                             f"sleeping for [{WAIT_FOR_DOCKER_SHUTDOWN_TIME}] seconds"
