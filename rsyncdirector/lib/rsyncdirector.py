@@ -463,7 +463,7 @@ class RsyncDirector(Thread):
                             if run_result == RunResult.FAIL:
                                 result = result_msg[1]
                                 self.logger.error(
-                                    f"action failed, exiting job; job_id={job_id}, action_id=FIXME_add-id, "
+                                    f"action failed, exiting job; job_id={job_id}, action_id={action_id}, "
                                     f"result.stdout={result.stdout.strip()}, result.sterr={result.stderr.strip()}, "
                                     f"result.return_code={result.return_code}, result={result_msg}"
                                 )
@@ -472,7 +472,7 @@ class RsyncDirector(Thread):
                                 ).inc()
                                 return
                             self.logger.info(
-                                f"action suceeded; job_id={job_id}, action_id=FIXME_add-id, result={result_msg}"
+                                f"action suceeded; job_id={job_id}, action_id={action_id}, result={result_msg}"
                             )
                         except Exception as e:
                             self.logger.error(f"reading from result queue; e={e}")
