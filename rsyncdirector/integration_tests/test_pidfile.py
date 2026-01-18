@@ -193,8 +193,8 @@ class ITPidFile(ITBase):
     # Helpers ------------------------------------------------------------------
     #
     # Local --------------------------------------------------------------------
-    def __get_pid_file_local(self, pid: int = None) -> Tuple[PidFile, str]:
-        path = os.path.join(self.test_configs.pid_dir, FILE_NAME)
+    def __get_pid_file_local(self, pid: int | None = None) -> Tuple[PidFile, str]:
+        path = os.path.join(self.test_configs["pid_dir"], FILE_NAME)
         pid = PID if pid is not None else os.getpid()
         return (
             PidFileLocal(
@@ -205,8 +205,8 @@ class ITPidFile(ITBase):
             path,
         )
 
-    def __write_test_pid_local(self, pid: int = None, empty: bool = False):
-        path = os.path.join(self.test_configs.pid_dir, FILE_NAME)
+    def __write_test_pid_local(self, pid: int | None = None, empty: bool = False):
+        path = os.path.join(self.test_configs["pid_dir"], FILE_NAME)
         if empty:
             file_path = Path(path)
             file_path.touch()
@@ -221,7 +221,7 @@ class ITPidFile(ITBase):
         return path
 
     def __validate_local_pid_file(
-        self, file_should_exist: bool, expected_path: str, expected_pid: int = None
+        self, file_should_exist: bool, expected_path: str, expected_pid: int | None = None
     ) -> None:
         p = Path(expected_path)
         is_file = p.is_file()
@@ -254,7 +254,7 @@ class ITPidFile(ITBase):
 
         return -1
 
-    def __get_pid_file_remote(self, conn: Connection, pid: int = None) -> PidFile:
+    def __get_pid_file_remote(self, conn: Connection, pid: int | None = None) -> PidFile:
         # FIXME: broken logic here
         pid = PID if pid is None else os.getpid()
         return PidFileRemote(
@@ -264,7 +264,7 @@ class ITPidFile(ITBase):
             conn=conn,
         )
 
-    def __write_test_pid_remote(self, conn: Connection, pid: int = None):
+    def __write_test_pid_remote(self, conn: Connection, pid: int | None = None):
         result = conn.run(f"echo {pid} > {REMOTE_PATH}")
         if not result.ok:
             self.fail(f"writing test pid file; result={result}")
@@ -281,14 +281,13 @@ class ITPidFile(ITBase):
         self,
         conn: Connection,
         file_should_exist: bool,
-        expected_pid: int = None,
+        expected_pid: int | None = None,
     ) -> None:
         result = conn.run(f"cat {REMOTE_PATH}", warn=True, hide=True)
         if file_should_exist:
             if not result.ok:
                 self.fail(
-                    f"expected remote file did not exist; REMOTE_PATH={REMOTE_PATH}",
-                    result={result},
+                    f"expected remote file did not exist; REMOTE_PATH={REMOTE_PATH}, result={result}"
                 )
                 return
             actual_pid = result.stdout

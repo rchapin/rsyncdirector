@@ -36,7 +36,9 @@ class ExpectedFile:
 
 
 class ExpectedDir(object):
-    def __init__(self, path: str, files: List[ExpectedFile] = None, dirs: List[str] = None) -> None:
+    def __init__(
+        self, path: str, files: List[ExpectedFile] | None = None, dirs: List[str] | None = None
+    ) -> None:
         self.path = path
         self.files = files
         self.dirs = dirs
@@ -53,14 +55,14 @@ class ITBase(unittest.TestCase):
 
     def get_default_test_data(self, job_type: JobType) -> Tuple[ExpectedData, str]:
         expected_data = ExpectedData(job_type)
-        source_data_dir = os.path.join(self.test_configs.test_data_dir, "d1")
+        source_data_dir = os.path.join(self.test_configs["test_data_dir"], "d1")
         f1_bytes = IntegrationTestUtils.create_test_file(source_data_dir, "f1.txt", 256)
         f1_expected_path = None
 
         match job_type:
             case JobType.LOCAL:
                 f1_expected_path = os.path.join(
-                    os.path.sep, self.test_configs.test_local_sync_target_dir, "d1", "f1.txt"
+                    os.path.sep, self.test_configs["test_local_sync_target_dir"], "d1", "f1.txt"
                 )
             case JobType.REMOTE:
                 f1_expected_path = os.path.join("/data/d1/", "f1.txt")
@@ -73,27 +75,29 @@ class ITBase(unittest.TestCase):
     def setup_base(self) -> None:
         logger.info("Running setup_base")
         self.test_configs = IntegrationTestUtils.get_test_configs()
+        self.waitfor_timeout_seconds = float(self.test_configs["waitfor_timeout_seconds"])
+        self.waitfor_poll_interval = float(self.test_configs["waitfor_poll_interval"])
 
         # Clean any test dirs if they exist and then recreate them.
         test_dirs = [
-            self.test_configs.config_dir,
-            self.test_configs.lock_dir,
-            self.test_configs.block_dir,
-            self.test_configs.pid_dir,
-            self.test_configs.test_data_dir,
-            self.test_configs.test_local_sync_target_dir,
+            self.test_configs["config_dir"],
+            self.test_configs["lock_dir"],
+            self.test_configs["block_dir"],
+            self.test_configs["pid_dir"],
+            self.test_configs["test_data_dir"],
+            self.test_configs["test_local_sync_target_dir"],
         ]
         for d in test_dirs:
             shutil.rmtree(d, ignore_errors=True)
             os.makedirs(d, exist_ok=True)
 
         # Ensure that there isn't a dangling test process already listening on that port
-        self.kill_process_listening_on_port(int(self.test_configs.metrics_scraper_target_port))
+        self.kill_process_listening_on_port(int(self.test_configs["metrics_scraper_target_port"]))
 
     def kill_process_listening_on_port(self, port: int) -> None:
         found_process = False
         for conn in psutil.net_connections(kind="inet"):
-            if conn.laddr.port == port:
+            if conn.laddr and conn.laddr.port == port:
                 pid = conn.pid
                 if pid:
                     found_process = True
@@ -234,7 +238,7 @@ class ITBase(unittest.TestCase):
                 for expected_sub_dir in expected_dir.dirs:
                     if expected_sub_dir not in actual_sub_dirs:
                         self.fail(
-                            f"expected_sub_dir was not present in dir; expected_sub_dir={expected_sub_dir.path}, dir={expected_dir.path}"
+                            f"expected_sub_dir was not present in dir; expected_sub_dir={expected_sub_dir}, dir={expected_dir.path}"
                         )
                     actual_sub_dirs.remove(expected_sub_dir)
 

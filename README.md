@@ -10,7 +10,7 @@ For example:  Every 24 hours `rsyncdirector` runs on `laptop01` backing up data 
 
 `rsyncdirector` runs as a `systemd` service via a template unit file to enable running multiple `rsyncdirector` instances on a single host.
 
-`rsyncdirector` communicates to remote hosts over SSH using the Python [Fabric](https://www.fabfile.org/) library which depends on the Python [Paramiko](https://www.paramiko.org/) library for the core SSH protocol implementation.  SSH connections are currently authenticated using passphrase-less SSH keys.
+`rsyncdirector` communicates to remote hosts over SSH using the Python [Fabric](https://www.fabfile.org/) library which depends on [Paramiko](https://www.paramiko.org/) for the core SSH protocol implementation.  SSH connections are currently authenticated using passphrase-less SSH keys.
 
 `rsync` functionality is implemented by the underlying `rsync` package installed on the host.
 

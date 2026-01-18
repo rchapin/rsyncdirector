@@ -10,7 +10,7 @@ from dataclass_wizard import JSONWizard, YAMLWizard
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from fabric import Connection
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, NamedTuple
 import docker
 import logging
 import os
@@ -92,7 +92,7 @@ class SyncAction(Action):
 @dataclass
 class CommandAction(Action):
     command: str
-    args: Optional[List[str]]=None
+    args: Optional[List[str]] = None
 
 
 @dataclass
@@ -103,8 +103,8 @@ class Job(JSONWizard):
     id: str
     type: str
     lock_files: List[LockFile]
-    blocks_on: List[BlocksOn]
-    actions: Sequence[Action]
+    actions: Sequence[Action] | None = None
+    blocks_on: List[BlocksOn] | None = None
 
 
 @dataclass
@@ -177,17 +177,17 @@ class IntegrationTestUtils(object):
         port = None
         match container_type:
             case ContainerType.TARGET:
-                port = test_configs.container_target_port
+                port = test_configs["container_target_port"]
             case ContainerType.REMOTE:
-                port = test_configs.container_remote_port
+                port = test_configs["container_remote_port"]
             case _:
                 raise ValueError(f"Invalid container type: {container_type}")
 
         return Connection(
-            host=test_configs.test_host,
+            host=test_configs["test_host"],
             user="root",
             port=port,
-            connect_kwargs=dict(key_filename=test_configs.ssh_identity_file),
+            connect_kwargs=dict(key_filename=test_configs["ssh_identity_file"]),
         )
 
     @staticmethod
@@ -205,105 +205,97 @@ class IntegrationTestUtils(object):
 
     @staticmethod
     def get_app_configs(
-        test_configs: namedtuple, job_type: JobType, rsync_id: str = None
+        test_configs: dict[str, str], job_type: JobType, rsync_id: str | None = None
     ) -> AppConfigs:
-        retval = None
-
+        # Always add overriding metrics configs for the listening port so that we do not collide
+        # with an instance that might be running on the developer workstation.
         match job_type:
             case JobType.LOCAL:
-                retval = AppConfigs(
-                    rsync_id=rsync_id if rsync_id is not None else RSYNC_ID_DEFAULT,
-                    cron_schedule="* * * * *",
-                    pid_file_dir=test_configs.pid_dir,
-                    jobs=[
-                        Job(
-                            id="local_to_local",
-                            type="local",
-                            lock_files=[
-                                LockFile(
-                                    type="local",
-                                    path=os.path.join(test_configs.lock_dir, "lock_file"),
-                                ),
-                            ],
-                            actions=None,
-                            blocks_on=None,
-                        )
-                    ],
+                retval = IntegrationTestUtils._get_local_app_configs(
+                    test_configs, job_type, rsync_id
                 )
+                retval.metrics = Metrics(port=test_configs["metrics_scraper_target_port"])
+                return retval
+
             case JobType.REMOTE:
-                retval = AppConfigs(
-                    rsync_id=rsync_id if rsync_id is not None else RSYNC_ID_DEFAULT,
-                    cron_schedule="* * * * *",
-                    pid_file_dir=test_configs.pid_dir,
-                    jobs=[
-                        JobRemote(
-                            id="local_to_container",
-                            type="remote",
-                            user="root",
-                            host=test_configs.test_host,
-                            port=test_configs.container_target_port,
-                            private_key_path=test_configs.ssh_identity_file,
-                            lock_files=[
-                                LockFile(
-                                    type="local",
-                                    path=os.path.join(test_configs.lock_dir, "lock_file"),
-                                ),
-                            ],
-                            actions=None,
-                            blocks_on=None,
-                        )
-                    ],
+                retval = IntegrationTestUtils._get_remote_app_configs(
+                    test_configs, job_type, rsync_id
                 )
+                retval.metrics = Metrics(port=test_configs["metrics_scraper_target_port"])
+                return retval
             case _:
                 self.fail(f"unknown JobType; job_type={job_type}")
 
-        # Always add overriding metrics configs for the listening port so that we do not collide
-        # with an instance that might be running on the deveoper workstation.
-        retval.metrics = Metrics(
-            port=test_configs.metrics_scraper_target_port,
+    @staticmethod
+    def _get_local_app_configs(
+        test_configs: dict[str, str], job_type: JobType, rsync_id: str | None = None
+    ) -> AppConfigs:
+        return AppConfigs(
+            rsync_id=rsync_id if rsync_id is not None else RSYNC_ID_DEFAULT,
+            cron_schedule="* * * * *",
+            pid_file_dir=test_configs["pid_dir"],
+            jobs=[
+                Job(
+                    id="local_to_local",
+                    type="local",
+                    lock_files=[
+                        LockFile(
+                            type="local",
+                            path=os.path.join(test_configs["lock_dir"], "lock_file"),
+                        ),
+                    ],
+                    actions=None,
+                    blocks_on=None,
+                )
+            ],
         )
 
-        return retval
+    @staticmethod
+    def _get_remote_app_configs(
+        test_configs: dict[str, str], job_type: JobType, rsync_id: str | None = None
+    ) -> AppConfigs:
+        return AppConfigs(
+            rsync_id=rsync_id if rsync_id is not None else RSYNC_ID_DEFAULT,
+            cron_schedule="* * * * *",
+            pid_file_dir=test_configs["pid_dir"],
+            jobs=[
+                JobRemote(
+                    id="local_to_container",
+                    type="remote",
+                    user="root",
+                    host=test_configs["test_host"],
+                    port=test_configs["container_target_port"],
+                    private_key_path=test_configs["ssh_identity_file"],
+                    lock_files=[
+                        LockFile(
+                            type="local",
+                            path=os.path.join(test_configs["lock_dir"], "lock_file"),
+                        ),
+                    ],
+                    actions=None,
+                    blocks_on=None,
+                )
+            ],
+        )
 
     @classmethod
-    def get_test_configs(cls):
+    def get_test_configs(cls) -> dict[str, str]:
         """
         Dynamically builds a named tuple from the env vars exported that are prefixed by the
         ENV_VAR_PREFIX string.
         """
         env_vars = EnvVars.get_env_vars(ENV_VAR_PREFIX)
-        attributes_list = []
-        values = []
+        retval = {}
+
         for k, v in env_vars.items():
-            """
-            Generate an attribute name for the namedtuple by removing the
-            the prefix from the key and converting it to lower-case.
-            """
+            # Generate a key by removing the prefix and converting to lower-case
             key = k.replace(f"{ENV_VAR_PREFIX}_", "").lower()
-            attributes_list.append(key)
-
-            # We know that there are some configs that have to be parsed into numerical values and we
-            # will just do it here so that we don't have to do it multiple times in the test code.
-            parse_to_float_keys = ["waitfor_timeout_seconds", "waitfor_poll_interval"]
-            if key in parse_to_float_keys:
-                v = float(v)
-
-            values.append(v)
-
-        attributes = " ".join(attributes_list)
-        test_conf = namedtuple(TEST_CONF_NAMED_TUPLE, attributes)
-        retval = test_conf(*values)
+            retval[key] = v
 
         # Generate a log message of all of the test config values.
-        entries = []
-        idx = 0
-        for attrib in attributes_list:
-            entries.append(f"{attrib}:{values[idx]}")
-            idx += 1
-
-        entries.sort()
+        entries = [f"{k}:{v}" for k, v in sorted(retval.items())]
         log_msg = "\n".join(entries)
-        logger.info(f"Generating TestConfigs namedtuple with attributes:\n{log_msg}")
+        logger.info(f"Generating test configs dict with keys:\n{log_msg}")
         return retval
 
     @staticmethod
@@ -348,15 +340,15 @@ class IntegrationTestUtils(object):
             os.environ.pop(k)
 
     @staticmethod
-    def start_docker_containers(configs, docker_client):
+    def start_docker_containers(test_configs, docker_client):
         containers = [
-            (configs.container_target_name, configs.container_target_port),
-            (configs.container_remote_name, configs.container_remote_port),
+            (test_configs["container_target_name"], test_configs["container_target_port"]),
+            (test_configs["container_remote_name"], test_configs["container_remote_port"]),
         ]
         for name, port in containers:
             p = {"22/tcp": ("0.0.0.0", port)}
             container = docker_client.containers.run(
-                configs.image_name,
+                test_configs["image_name"],
                 detach=True,
                 ports=p,
                 name=name,
@@ -366,10 +358,13 @@ class IntegrationTestUtils(object):
             IntegrationTestUtils.wait_for_docker_ssh(port=port)
 
     @staticmethod
-    def stop_docker_containers(configs, docker_client=None):
+    def stop_docker_containers(test_configs, docker_client=None):
         client = docker_client if docker_client is not None else docker.from_env()
 
-        for container_name in [configs.container_target_name, configs.container_remote_name]:
+        for container_name in [
+            test_configs["container_target_name"],
+            test_configs["container_remote_name"],
+        ]:
             # First see if the container is running
             container, is_running = IntegrationTestUtils.is_docker_container_running(
                 container_name, client
@@ -416,7 +411,7 @@ class IntegrationTestUtils(object):
     def write_app_configs(test_configs, app_configs: AppConfigs):
         c = app_configs.to_dict(skip_defaults=True)
         c = IntegrationTestUtils.remove_nulls_from_dict(c)
-        output_path = os.path.join(test_configs.config_dir, test_configs.config_file)
+        output_path = os.path.join(test_configs["config_dir"], test_configs["config_file"])
         IntegrationTestUtils.write_yaml_file(output_path, c)
 
     @staticmethod

@@ -56,8 +56,8 @@ class ITRsyncDirector(ITBase):
         IntegrationTestUtils.restart_docker_containers(self.test_configs)
 
         metrics_scraper_cfg = MetricsScraperCfg(
-            addr=self.test_configs.metrics_scraper_target_addr,
-            port=self.test_configs.metrics_scraper_target_port,
+            addr=self.test_configs["metrics_scraper_target_addr"],
+            port=self.test_configs["metrics_scraper_target_port"],
             scrape_interval=timedelta(seconds=0.25),
             conn_timeout=timedelta(seconds=1),
         )
@@ -68,8 +68,10 @@ class ITRsyncDirector(ITBase):
         self.metrics_scraper.shutdown()
         IntegrationTestUtils.stop_docker_containers(self.test_configs)
 
-    def run_rsyncdirector(self, override_configs: dict = None) -> RsyncDirector:
-        config_path = os.path.join(self.test_configs.config_dir, self.test_configs.config_file)
+    def run_rsyncdirector(self, override_configs: dict[str, str] | None = None) -> RsyncDirector:
+        config_path = os.path.join(
+            self.test_configs["config_dir"], self.test_configs["config_file"]
+        )
         os.environ[cfg.CONFIG_ENV_VAR_KEY] = config_path
         if override_configs is not None:
             for k, v in override_configs.items():
@@ -87,12 +89,6 @@ class ITRsyncDirector(ITBase):
         return rsyncdirector
 
     def test_will_shutdown_when_finding_an_existing_pid_file_that_is_not_our_pid(self):
-
-        s = "\t\n@#$%^&*()ljsdf823_ljsdf?<"
-        # s = "".join(c for c in s if c.isalnum() else "_")
-        s = "".join(c for c in s if c.isalnum())
-        pass
-
         """
         Tests that we will shutdown without executing any commands when we find an existing pid file
         that does not contain our pid.
@@ -102,12 +98,12 @@ class ITRsyncDirector(ITBase):
 
         # Write out the pid file with a pid that will not be the same as the running process.
         pid_file_name = f"rsyncdirector-{RSYNC_ID_DEFAULT}.pid"
-        pid_file_path = os.path.join(self.test_configs.pid_dir, pid_file_name)
+        pid_file_path = os.path.join(self.test_configs["pid_dir"], pid_file_name)
         with open(pid_file_path, "w") as fh:
             fh.write("1")
 
         # Generate some test data that we will include in the configs but expect NOT to be rsynced.
-        d1 = os.path.join(self.test_configs.test_data_dir, "d1")
+        d1 = os.path.join(self.test_configs["test_data_dir"], "d1")
         IntegrationTestUtils.create_test_file(d1, "f1.txt", 256)
 
         # We don't expect anything to have been written into the /data dir so we define ExpectedData
@@ -142,12 +138,12 @@ class ITRsyncDirector(ITBase):
         job_type = JobType.REMOTE
         expected_data = ExpectedData(job_type)
 
-        d1 = os.path.join(self.test_configs.test_data_dir, "d1")
+        d1 = os.path.join(self.test_configs["test_data_dir"], "d1")
         f1_bytes = IntegrationTestUtils.create_test_file(d1, "f1.txt", 256)
         f1_expected_path = os.path.join("/data/d1/", "f1.txt")
         expected_data.files.append(ExpectedFile(path=f1_expected_path, bytes=f1_bytes))
 
-        d2 = os.path.join(self.test_configs.test_data_dir, "d1", "d2")
+        d2 = os.path.join(self.test_configs["test_data_dir"], "d1", "d2")
         f2_bytes = IntegrationTestUtils.create_test_file(d2, "f2.txt", 1024)
         f2_expected_path = os.path.join("/data/d1/d2", "f2.txt")
         expected_data.files.append(ExpectedFile(path=f2_expected_path, bytes=f2_bytes))
@@ -183,7 +179,7 @@ class ITRsyncDirector(ITBase):
                 action="sync",
                 id=f"sync-of{source_data_dir}",
                 source=source_data_dir,
-                dest=self.test_configs.test_local_sync_target_dir,
+                dest=self.test_configs["test_local_sync_target_dir"],
                 opts=["-av", "--delete"],
             )
         ]
@@ -207,7 +203,7 @@ class ITRsyncDirector(ITBase):
         # stores paths and sizes of the files.
         expected_data = ExpectedData(job_type)
 
-        d1 = os.path.join(self.test_configs.test_data_dir, "d1")
+        d1 = os.path.join(self.test_configs["test_data_dir"], "d1")
         f1_bytes = IntegrationTestUtils.create_test_file(d1, "f1.txt", 256)
         f1_expected_path = os.path.join("/data/d1/", "f1.txt")
         expected_data.files.append(ExpectedFile(path=f1_expected_path, bytes=f1_bytes))
@@ -240,8 +236,8 @@ class ITRsyncDirector(ITBase):
                     wait_time=1,
                     user="root",
                     host="localhost",
-                    port=self.test_configs.container_remote_port,
-                    private_key_path=self.test_configs.ssh_identity_file,
+                    port=self.test_configs["container_remote_port"],
+                    private_key_path=self.test_configs["ssh_identity_file"],
                 ),
             ]
 
@@ -257,8 +253,8 @@ class ITRsyncDirector(ITBase):
                 logger=logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
-                timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             # Once we see that we have been blocked at least once, remove the lock file and the
             # rsyncdirector should continue executing the job.
@@ -285,7 +281,9 @@ class ITRsyncDirector(ITBase):
         expected_data, source_data_dir = self.get_default_test_data(job_type)
 
         # Create a lock file that we should wait until it has been removed before syncing the data.
-        local_block_file_path = os.path.join(os.path.sep, self.test_configs.block_dir, "blockfile")
+        local_block_file_path = os.path.join(
+            os.path.sep, self.test_configs["block_dir"], "blockfile"
+        )
         with open(local_block_file_path, "w") as fh:
             fh.write("647")
 
@@ -320,8 +318,8 @@ class ITRsyncDirector(ITBase):
             logger=logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
-            timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-            poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+            timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+            poll_interval=timedelta(seconds=self.waitfor_poll_interval),
         )
         # Once we see that we have been blocked at least once, remove the lock file and the
         # rsyncdirector should continue executing the job.
@@ -343,7 +341,7 @@ class ITRsyncDirector(ITBase):
             # we should wait until they have BOTH been removed before syncing the data.
             existing_pid = "647"
             local_block_file_path = os.path.join(
-                os.path.sep, self.test_configs.block_dir, "blockfile"
+                os.path.sep, self.test_configs["block_dir"], "blockfile"
             )
             with open(local_block_file_path, "w") as fh:
                 fh.write(existing_pid)
@@ -378,8 +376,8 @@ class ITRsyncDirector(ITBase):
                     wait_time=1,
                     user="root",
                     host="localhost",
-                    port=self.test_configs.container_remote_port,
-                    private_key_path=self.test_configs.ssh_identity_file,
+                    port=self.test_configs["container_remote_port"],
+                    private_key_path=self.test_configs["ssh_identity_file"],
                 ),
                 BlocksOn(
                     path=local_block_file_path,
@@ -400,8 +398,8 @@ class ITRsyncDirector(ITBase):
                 logger=logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
-                timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             logger.info(
                 f"removing remote block file; remote_block_file_path={remote_block_file_path}"
@@ -419,8 +417,8 @@ class ITRsyncDirector(ITBase):
                 logger=logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
-                timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             logger.info(f"removing local block file; local_block_file_path={local_block_file_path}")
             os.remove(local_block_file_path)
@@ -440,7 +438,7 @@ class ITRsyncDirector(ITBase):
         IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
 
         expected_data = ExpectedData(job_type)
-        source_data_dir = os.path.join(self.test_configs.test_data_dir, "d1")
+        source_data_dir = os.path.join(self.test_configs["test_data_dir"], "d1")
         f1_bytes = IntegrationTestUtils.create_test_file(source_data_dir, "f1.txt", 1024 * 1024)
         f1_expected_path = os.path.join("/data/d1/", "f1.txt")
         expected_data.files.append(ExpectedFile(path=f1_expected_path, bytes=f1_bytes))
@@ -458,10 +456,12 @@ class ITRsyncDirector(ITBase):
             # complicated way that I figured out how to go about it.
             existing_pid = "647"
             local_block_file_path = os.path.join(
-                os.path.sep, self.test_configs.block_dir, "blockfile"
+                os.path.sep, self.test_configs["block_dir"], "blockfile"
             )
 
-            local_lock_file_path = os.path.join(os.path.sep, self.test_configs.lock_dir, "lockfile")
+            local_lock_file_path = os.path.join(
+                os.path.sep, self.test_configs["lock_dir"], "lockfile"
+            )
             remote_lock_file_path = os.path.join(os.path.sep, "var", "tmp", "lockfile")
             app_configs = IntegrationTestUtils.get_app_configs(self.test_configs, job_type)
             job = app_configs.jobs[0]
@@ -476,8 +476,8 @@ class ITRsyncDirector(ITBase):
                     path=remote_lock_file_path,
                     user="root",
                     host="localhost",
-                    port=self.test_configs.container_remote_port,
-                    private_key_path=self.test_configs.ssh_identity_file,
+                    port=self.test_configs["container_remote_port"],
+                    private_key_path=self.test_configs["ssh_identity_file"],
                 ),
             ]
             job.actions = [
@@ -514,8 +514,8 @@ class ITRsyncDirector(ITBase):
                 logger=logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
-                timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             logger.info("verified metrics for two lock files")
 
@@ -552,7 +552,7 @@ class ITRsyncDirector(ITBase):
         source_data_dir_d3 = os.path.join(source_data_dir_d2, "d3")
         f2_bytes = IntegrationTestUtils.create_test_file(source_data_dir_d3, "f2.txt", 647)
         f2_expected_path = os.path.join(
-            os.path.sep, self.test_configs.test_local_sync_target_dir, "d1", "d2", "d3", "f2.txt"
+            os.path.sep, self.test_configs["test_local_sync_target_dir"], "d1", "d2", "d3", "f2.txt"
         )
         expected_data.files.append(ExpectedFile(path=f2_expected_path, bytes=f2_bytes))
 
@@ -569,7 +569,7 @@ class ITRsyncDirector(ITBase):
                 action="sync",
                 id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
-                dest=self.test_configs.test_local_sync_target_dir,
+                dest=self.test_configs["test_local_sync_target_dir"],
                 opts=["-av", "--delete"],
             )
         ]
@@ -586,7 +586,7 @@ class ITRsyncDirector(ITBase):
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
             timeout=timedelta(seconds=90),
-            poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+            poll_interval=timedelta(seconds=self.waitfor_poll_interval),
         )
 
         rsyncdirector.shutdown()
@@ -598,17 +598,17 @@ class ITRsyncDirector(ITBase):
         job_type = JobType.LOCAL
         expected_data = ExpectedData(job_type)
 
-        source_data_dir_data1 = os.path.join(self.test_configs.test_data_dir, "data1")
+        source_data_dir_data1 = os.path.join(self.test_configs["test_data_dir"], "data1")
         f1_bytes = IntegrationTestUtils.create_test_file(source_data_dir_data1, "f1.txt", 728)
         f1_expected_path = os.path.join(
-            self.test_configs.test_local_sync_target_dir, "data1", "f1.txt"
+            self.test_configs["test_local_sync_target_dir"], "data1", "f1.txt"
         )
         expected_data.files.append(ExpectedFile(path=f1_expected_path, bytes=f1_bytes))
 
-        source_data_dir_data2 = os.path.join(self.test_configs.test_data_dir, "data2")
+        source_data_dir_data2 = os.path.join(self.test_configs["test_data_dir"], "data2")
         f2_bytes = IntegrationTestUtils.create_test_file(source_data_dir_data2, "f2.txt", 963)
         f2_expected_path = os.path.join(
-            self.test_configs.test_local_sync_target_dir, "data2", "f2.txt"
+            self.test_configs["test_local_sync_target_dir"], "data2", "f2.txt"
         )
         expected_data.files.append(ExpectedFile(path=f2_expected_path, bytes=f2_bytes))
 
@@ -626,11 +626,12 @@ class ITRsyncDirector(ITBase):
                 action="sync",
                 id=f"sync-of-{source_data_dir_data1}",
                 source=source_data_dir_data1,
-                dest=self.test_configs.test_local_sync_target_dir,
+                dest=self.test_configs["test_local_sync_target_dir"],
                 opts=["-av", "--delete"],
             ),
         ]
         job_id_2 = "job_id_2"
+        app_configs.jobs = list(app_configs.jobs)
         app_configs.jobs.append(
             Job(
                 id=job_id_2,
@@ -638,7 +639,7 @@ class ITRsyncDirector(ITBase):
                 lock_files=[
                     LockFile(
                         type="local",
-                        path=os.path.join(self.test_configs.lock_dir, "lock_file_2"),
+                        path=os.path.join(self.test_configs["lock_dir"], "lock_file_2"),
                     ),
                 ],
                 actions=[
@@ -646,7 +647,7 @@ class ITRsyncDirector(ITBase):
                         action="sync",
                         id=f"sync-of-{source_data_dir_data2}",
                         source=source_data_dir_data2,
-                        dest=self.test_configs.test_local_sync_target_dir,
+                        dest=self.test_configs["test_local_sync_target_dir"],
                         opts=["-av", "--delete"],
                     ),
                 ],
@@ -702,8 +703,8 @@ class ITRsyncDirector(ITBase):
                     wait_time=5,
                     user="root",
                     host="localhost",
-                    port=self.test_configs.container_remote_port,
-                    private_key_path=self.test_configs.ssh_identity_file,
+                    port=self.test_configs["container_remote_port"],
+                    private_key_path=self.test_configs["ssh_identity_file"],
                 ),
             ]
 
@@ -719,8 +720,8 @@ class ITRsyncDirector(ITBase):
                 logger=logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
-                timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             # Once we see that we have been blocked at least once, call shutdown.  If it shuts down
             # the test will fall through and pass.
@@ -779,8 +780,8 @@ class ITRsyncDirector(ITBase):
                     wait_time=1,
                     user="root",
                     host="localhost",
-                    port=self.test_configs.container_remote_port,
-                    private_key_path=self.test_configs.ssh_identity_file,
+                    port=self.test_configs["container_remote_port"],
+                    private_key_path=self.test_configs["ssh_identity_file"],
                     timeout=4,
                 ),
             ]
@@ -803,7 +804,7 @@ class ITRsyncDirector(ITBase):
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=90),
-                poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+                poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
             rsyncdirector.shutdown()
 
@@ -826,7 +827,7 @@ class ITRsyncDirector(ITBase):
 
         # Create a lock file that we should wait until it has been removed before syncing the data.
         # We will start by writing a pid that cannot possiibly be owned by the current process.
-        lock_file_path = os.path.join(os.path.sep, self.test_configs.lock_dir, "lockfile")
+        lock_file_path = os.path.join(os.path.sep, self.test_configs["lock_dir"], "lockfile")
         with open(lock_file_path, "w") as fh:
             fh.write("1")
 
@@ -867,8 +868,8 @@ class ITRsyncDirector(ITBase):
             logger=logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
-            timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-            poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+            timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+            poll_interval=timedelta(seconds=self.waitfor_poll_interval),
         )
         # Once we see that we have been blocked at least once, remove the lock file and the
         # rsyncdirector should continue executing the job.
@@ -889,8 +890,8 @@ class ITRsyncDirector(ITBase):
             logger=logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
-            timeout=timedelta(seconds=self.test_configs.waitfor_timeout_seconds),
-            poll_interval=timedelta(seconds=self.test_configs.waitfor_poll_interval),
+            timeout=timedelta(seconds=self.waitfor_timeout_seconds),
+            poll_interval=timedelta(seconds=self.waitfor_poll_interval),
         )
 
         rsyncdirector.join(timeout=5.0)
@@ -907,7 +908,7 @@ class ITRsyncDirector(ITBase):
         expected_data, source_data_dir = self.get_default_test_data(job_type)
 
         # A shell script that we will call that runs a few commands.
-        test_shell_script_path = os.path.join(self.test_configs.config_dir, "test.sh")
+        test_shell_script_path = os.path.join(self.test_configs["config_dir"], "test.sh")
         with open(test_shell_script_path, "w") as fh:
             fh.write(TEST_SHELL_SCRIPT)
         current_mode = os.stat(test_shell_script_path).st_mode
@@ -916,10 +917,10 @@ class ITRsyncDirector(ITBase):
 
         ssh_args = [
             "-p",
-            self.test_configs.container_target_port,
+            self.test_configs["container_target_port"],
             "-i",
-            self.test_configs.ssh_identity_file,
-            f"root@{self.test_configs.test_host}",
+            self.test_configs["ssh_identity_file"],
+            f"root@{self.test_configs["test_host"]}",
         ]
         mkdir_args = [*ssh_args, "mkdir", "/tarballs"]
         tar_args = [*ssh_args, "tar", "-czvf", "/tarballs/data.tar.gz", "/data"]
@@ -998,7 +999,7 @@ class ITRsyncDirector(ITBase):
     def test_failed_action_aborts_job(self):
         job_type = JobType.LOCAL
         IntegrationTestUtils.set_env_vars(RUNONCE_ENV_VAR)
-        dest_dir = self.test_configs.test_local_sync_target_dir
+        dest_dir = self.test_configs["test_local_sync_target_dir"]
         _, source_data_dir = self.get_default_test_data(job_type)
         # We don't expect anything to have been written into the destination dir so we define
         # ExpectedData specifying the path of the directory we expect to be empty.
@@ -1018,7 +1019,7 @@ class ITRsyncDirector(ITBase):
                 action="sync",
                 id=f"sync-of-{source_data_dir}",
                 source=source_data_dir,
-                dest=self.test_configs.test_local_sync_target_dir,
+                dest=self.test_configs["test_local_sync_target_dir"],
                 opts=["-av", "--delete"],
             ),
         ]
