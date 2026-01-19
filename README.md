@@ -16,23 +16,23 @@ For example:  Every 24 hours `rsyncdirector` runs on `laptop01` backing up data 
 
 Each instance can be configured to run under any arbitrary user and connect to any remote host that it can reach with the supplied credentials.  The user under which it runs must have read permissions for the files that it is configured to `rsync`.  The administrator must distribute public SSH keys to the hosts to which data is to be `rsync`ed and can optionally specify a private key other than the `rsyncdirector` user's default set of private keys.
 
-`rsyncdirector` can also run arbitrary `command` actions interspersed between `sync` actions to enable dumping of databases, or any other command to be run.
+`rsyncdirector` can also run arbitrary `command` actions interspersed between `sync` actions to enable dumping of databases, or any other commands to be run.
 
 See the annotated, [example config file](rsyncdirector/resources/rsyncdirector.yaml) for details on how to configure an instance of `rsyncdirector`.
 
-There is a companion program, [`rsyncdirector_deploy`](https://github.com/rchapin/rsyncdirector_deploy), to assist in the installation and deployment of configurations of `rsyncdirector`.
+There is a companion program, [`rsyncdirector_deploy`](https://github.com/rchapin/rsyncdirector_deploy), to assist in the installation and deployment of instances of `rsyncdirector`.
 
 ## Forcing a Run Now
 
 The `rsyncdirector` listens for `SIGHUP` events and when receives one will immediately schedule a `run-once` execution of the configured jobs.
 
 1. Get the PID of the `rsyncdirector` process.  If there are multiple instances of it running you will need to adjust the way you search for the PID.
-    ```
+    ```bash
     pgrep rsyncdirector
     ```
 
 1. Send the `SIGHUP`
-    ```
+    ```bash
     kill -SIGHUP <PID>
     ```
 
@@ -46,14 +46,16 @@ Each `rsyncdirector` instance requires defining a peridocity for which it will r
 ### job
 Each job encapsulates n number of `actions`; either a `sync` or a `command`.  The job defines the specifics for connecting to a remote host for `sync` actions if the job type is `remote`.
 
- which either rsyncs data between directories on the localhost or data to a single remote host.  The job defines the specifics for connecting to a remote host for `sync` actions if the job type is `remote`.
+ <!-- which either rsyncs data between directories on the localhost or data to a single remote host.  The job defines the specifics for connecting to a remote host for `sync` actions if the job type is `remote`. -->
 
-### actions
-Each job
-An action is
+### action
+An action is defined within the scope of a job and is either a `sync` or `command`.  **ALL** `action`s must success for a job to continue running.  If one of the `action`s fail, the job is short-circuited and the next job is executed.
 
 #### sync
-A `sync` `action` defines the specific `rsync` command to be run.  Each "inherits" the definitions of the job to enable the concatenation of the `rsync` command to include the specified user, host, and port information for `remote` jobs.  The `source` and `dest` are self-explanatory, and the `opts` list enables the inclusion of any arbitrary options that  the undelying `rsync` implementation on the host allows.
+A `sync` `action` defines the specific `rsync` command to be run.  Each "inherits" the definitions of the job to enable the concatenation of the `rsync` command to include the specified user, host, and port information for `remote` jobs.  The `source` and `dest` are self-explanatory, and the `opts` list enables the inclusion of any arbitrary options that  the underlying `rsync` implementation on the host allows.
+
+#### command
+A `command` `action` defines a specific command to be run _on the host on which `rsyncdirector` is running_.  It includes the command itself and an optional list of arguments.
 
 ### lock_files
 `lock_files` define an arbitrary number of files that will be created on either the localhost or remote host(s) to signal to other `rsyncdirector` instances that a given instance is running.
@@ -79,7 +81,7 @@ Once that is installed, run `./run-tests.sh --dev-setup` to create a development
 
 ### Building a Distribution
 
-```
+```bash
 python -m build
 twine check dist/*
 ```
@@ -87,21 +89,21 @@ twine check dist/*
 #### Uploading to PyPi
 
 1. Generate an API token and add the requisite `[pypi]` entry to the `~/.pypirc` file
-    ```
+    ```ini
     [pypi]
     username = __token__
     password = <API-token>
     ```
 
 1. Then upload the artifacts to PyPi
-    ```
+    ```bash
     python -m twine upload --repository pypi dist/*
     ```
 
 #### Uploading to Nexus
 
 In my case, I have an instance of Nexus running in my network with a `~/.pypirc` file configured for it and publish the artifacts there with the following command:
-```
+```bash
 twine upload --cert <path-to-nexus-cert>--verbose --repository pypi-[dev|release] dist/rsyncdirector-<version>.tar.gz
 ```
 
@@ -110,21 +112,26 @@ twine upload --cert <path-to-nexus-cert>--verbose --repository pypi-[dev|release
 The integration tests require that the user running the tests can ssh to `root@localhost` witout having to enter the password.  To do so add a public ssh key of the user running the tests to the authorized keys of the `root` user on the localhost.
 
 Then, from the root of the repo run
-```
+```bash
 ./run-tests.sh
 ```
 
 ### Setting Up to Run and Debug Integration Tests in VSCode
 
-The requisite configs are already present in the provided `.vscode/settings.json` file.
+Most of the requisite configs are already present in the provided `.vscode/settings.json` file.
+
+1. Enable the following in your VSCode settings (Workspace or User settings)
+    ```json
+    "python.analysis.typeCheckingMode": "basic"
+    ```
 
 1. Export the path to the required version of Python that you want to use.  If you already have one that will suffice, skip this step.
-    ```
+    ```bash
     export RSYNCDIRECTORINTTEST_PYTHON=<path-to-python-binary>
     ```
 
 1. Setup the test environment.  The following will create a `.env` file at the root of the repository that VSCode will read while running the tests and build the test containers.
-    ```
+    ```bash
     ./run-tests.sh --dev-setup
     ```
 
@@ -151,13 +158,13 @@ The requisite configs are already present in the provided `.vscode/settings.json
 ### Dependency Management
 
 First-order dependencies for `requirements.txt`, `requirements_test.txt`, are defined in the respective `.in` files.  If you make updates to the first order dependencies you need to "compile" the full dependency list.  First, ensure that `pip-tools` is installed in your dev virtual environment.  `dev` dependendies are just defined in `requirements_dev.txt`.
-```
+```bash
 pip install .[dev]
 pip install .[test]
 ```
 
 Then run the following
-```
+```bash
 pip-compile -v --no-emit-trusted-host --no-emit-index-url requirements.in
 pip-compile -v --no-emit-trusted-host --no-emit-index-url requirements_test.in
 ```
