@@ -480,7 +480,6 @@ class RsyncDirector(Thread):
                                 self.logger.error(
                                     f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
                                 )
-                                continue_job = False
                                 break
 
                         # Process exited, try one final non-blocking read in case message arrived
