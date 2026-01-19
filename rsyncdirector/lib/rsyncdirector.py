@@ -7,6 +7,7 @@
 import logging
 import multiprocessing
 import os
+import queue
 import sys
 import time
 import traceback
@@ -23,7 +24,6 @@ from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
 from rsyncdirector.lib.rsync import Rsync
 from rsyncdirector.lib.command import Command
 from rsyncdirector.lib.metrics import Metrics
-from rsyncdirector.lib.utils import Utils
 from enum import Enum
 from fabric import Connection
 from invoke import run
@@ -291,6 +291,7 @@ class RsyncDirector(Thread):
         )
         return process, result_queue
 
+    @staticmethod
     def __is_blocked_local(blocks_on_conf: Dict, logger: logging.Logger) -> bool:
         path = blocks_on_conf["path"]
         if os.path.exists(path):
@@ -454,6 +455,48 @@ class RsyncDirector(Thread):
 
                 try:
                     self.process.start()
+
+                    # We MUST read from queue BEFORE joining to avoid deadlock. If the child process
+                    # writes to the queue and the pipe buffer fills, it will block forever if we do
+                    # not consume from the queue first.  Because we do not know how long the process
+                    # will take and do not want to impose an arbitrary timeout we will poll the
+                    # queue with a short timeout so we can detect if the process exits without
+                    # sending a message, while still waiting as long as needed for the result.
+                    result_msg = None
+                    if result_queue:
+                        while self.process.is_alive():
+                            try:
+                                result_msg = result_queue.get(block=True, timeout=1.0)
+                                # We received a message, exit the loop polling the queue.
+                                break
+                            except queue.Empty:
+                                # If the queue is empty only continue looping if the process is
+                                # still alive.
+                                if not self.process.is_alive():
+                                    break
+                                # Process still running, continue waiting . . . .
+                                continue
+                            except Exception as e:
+                                self.logger.error(
+                                    f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
+                                )
+                                break
+
+                        # Process exited, try one final non-blocking read in case message arrived
+                        # just as process was exiting.
+                        if result_msg is None and not result_queue.empty():
+                            try:
+                                result_msg = result_queue.get(block=False)
+                            except:
+                                self.logger.error(
+                                    f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
+                                )
+                                metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
+                                    job_id, action_id
+                                ).inc()
+                                return
+
+                    # Now it's safe to join since we've consumed the queue
                     self.process.join()
 
                     if self.process.exitcode != 0:
@@ -461,27 +504,30 @@ class RsyncDirector(Thread):
                         metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc()
                         return
 
-                    if result_queue and not result_queue.empty():
-                        try:
-                            # TODO: make the timeout configurable.
-                            result_msg = result_queue.get(block=True, timeout=2.0)
-                            run_result = result_msg[0]
-                            if run_result == RunResult.FAIL:
-                                result = result_msg[1]
-                                self.logger.error(
-                                    f"action failed, exiting job; job_id={job_id}, action_id={action_id}, "
-                                    f"result.stdout={result.stdout.strip()}, result.sterr={result.stderr.strip()}, "
-                                    f"result.return_code={result.return_code}, result={result_msg}"
-                                )
-                                metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
-                                    job_id, action_id
-                                ).inc()
-                                return
-                            self.logger.info(
-                                f"action suceeded; job_id={job_id}, action_id={action_id}, result={result_msg}"
+                    if not result_msg:
+                        self.logger.error(
+                            f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
+                        )
+                        metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc()
+                        return
+
+                    # Process the result message.
+                    if result_msg:
+                        run_result = result_msg[0]
+                        if run_result == RunResult.FAIL:
+                            result = result_msg[1]
+                            self.logger.error(
+                                f"action failed, exiting job; job_id={job_id}, action_id={action_id}, "
+                                f"result.stdout={result.stdout.strip()}, result.sterr={result.stderr.strip()}, "
+                                f"result.return_code={result.return_code}, result={result_msg}"
                             )
-                        except Exception as e:
-                            self.logger.error(f"reading from result queue; e={e}")
+                            metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
+                                job_id, action_id
+                            ).inc()
+                            return
+                        self.logger.info(
+                            f"action suceeded; job_id={job_id}, action_id={action_id}, result={result_msg}"
+                        )
 
                 except Exception as e:
                     err_type = type(e).__name__

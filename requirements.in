@@ -3,7 +3,7 @@ APScheduler==3.10.4
 invoke==2.2.0
 PyYAML==6.0.1
 prometheus_client==0.21.1
-Flask==3.1.0
-requests==2.32.3
+Flask==3.1.2
+requests==2.32.5
 cffi==1.17.0
 psutil==7.1.3
