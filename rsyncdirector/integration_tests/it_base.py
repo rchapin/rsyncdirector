@@ -12,7 +12,6 @@ import rsyncdirector.lib.config as cfg
 import shutil
 import sys
 from dataclasses import dataclass
-from fabric import Connection
 from pathlib import Path
 from typing import Callable, Dict, List, Set, Tuple
 from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType
@@ -37,7 +36,9 @@ class ExpectedFile:
 
 
 class ExpectedDir(object):
-    def __init__(self, path: str, files: List[ExpectedFile] = None, dirs: List[str] = None) -> None:
+    def __init__(
+        self, path: str, files: List[ExpectedFile] | None = None, dirs: List[str] | None = None
+    ) -> None:
         self.path = path
         self.files = files
         self.dirs = dirs
@@ -54,14 +55,14 @@ class ITBase(unittest.TestCase):
 
     def get_default_test_data(self, job_type: JobType) -> Tuple[ExpectedData, str]:
         expected_data = ExpectedData(job_type)
-        source_data_dir = os.path.join(self.test_configs.test_data_dir, "d1")
+        source_data_dir = os.path.join(self.test_configs["test_data_dir"], "d1")
         f1_bytes = IntegrationTestUtils.create_test_file(source_data_dir, "f1.txt", 256)
         f1_expected_path = None
 
         match job_type:
             case JobType.LOCAL:
                 f1_expected_path = os.path.join(
-                    os.path.sep, self.test_configs.test_local_sync_target_dir, "d1", "f1.txt"
+                    os.path.sep, self.test_configs["test_local_sync_target_dir"], "d1", "f1.txt"
                 )
             case JobType.REMOTE:
                 f1_expected_path = os.path.join("/data/d1/", "f1.txt")
@@ -74,27 +75,29 @@ class ITBase(unittest.TestCase):
     def setup_base(self) -> None:
         logger.info("Running setup_base")
         self.test_configs = IntegrationTestUtils.get_test_configs()
+        self.waitfor_timeout_seconds = float(self.test_configs["waitfor_timeout_seconds"])
+        self.waitfor_poll_interval = float(self.test_configs["waitfor_poll_interval"])
 
         # Clean any test dirs if they exist and then recreate them.
         test_dirs = [
-            self.test_configs.config_dir,
-            self.test_configs.lock_dir,
-            self.test_configs.block_dir,
-            self.test_configs.pid_dir,
-            self.test_configs.test_data_dir,
-            self.test_configs.test_local_sync_target_dir,
+            self.test_configs["config_dir"],
+            self.test_configs["lock_dir"],
+            self.test_configs["block_dir"],
+            self.test_configs["pid_dir"],
+            self.test_configs["test_data_dir"],
+            self.test_configs["test_local_sync_target_dir"],
         ]
         for d in test_dirs:
             shutil.rmtree(d, ignore_errors=True)
             os.makedirs(d, exist_ok=True)
 
         # Ensure that there isn't a dangling test process already listening on that port
-        self.kill_process_listening_on_port(int(self.test_configs.metrics_scraper_target_port))
+        self.kill_process_listening_on_port(int(self.test_configs["metrics_scraper_target_port"]))
 
     def kill_process_listening_on_port(self, port: int) -> None:
         found_process = False
         for conn in psutil.net_connections(kind="inet"):
-            if conn.laddr.port == port:
+            if conn.laddr and conn.laddr.port == port:
                 pid = conn.pid
                 if pid:
                     found_process = True
@@ -127,69 +130,70 @@ class ITBase(unittest.TestCase):
     def validate_post_conditions(self, expected_data: ExpectedData) -> None:
         logger.info("Validating post conditions")
 
-        get_file_size = None
-        list_sub_dirs = None
-        find_files = None
+        match expected_data.job_type:
+            case JobType.LOCAL:
+                self.validate_local_post_conditions(expected_data)
+            case JobType.REMOTE:
+                self.validate_remote_post_conditions(expected_data)
+            case _:
+                self.fail(f"unknown JobType; job_type={expected_data.job_type}")
+
+    def validate_local_post_conditions(self, expected_data: ExpectedData) -> None:
+        def get_file_size(expected_file: ExpectedFile) -> Tuple[bool, int]:
+            try:
+                retval = os.path.getsize(expected_file.path)
+                return True, retval
+            except Exception as e:
+                return False, 0
+
+        def list_sub_dirs(path: str) -> List[str]:
+            p = Path(path)
+            retval = [entry.name for entry in p.iterdir() if entry.is_dir()]
+            return retval
+
+        def find_files(path: str) -> List[str]:
+            p = Path(path)
+            retval = [entry.name for entry in p.iterdir() if entry.is_file()]
+            return retval
+
+        self.validate_expected_dirs(expected_data.dirs, list_sub_dirs, find_files)
+        self.validate_expected_files(expected_data.files, get_file_size)
+
+    def validate_remote_post_conditions(self, expected_data: ExpectedData) -> None:
         conn = None
         try:
-            # Define the local or remote set of callbacks required to gather data to validate the
-            # post-conditions.
-            match expected_data.job_type:
-                case JobType.LOCAL:
 
-                    def get_file_size(expected_file: ExpectedFile) -> int:
-                        try:
-                            retval = os.path.getsize(expected_file.path)
-                            return True, retval
-                        except Exception as e:
-                            return False, 0
+            def run_cmd(cmd: str) -> List[str]:
+                retval: List[str] = []
+                if conn:
+                    result = conn.run(cmd, warn=True, hide=True)
+                    if result.ok:
+                        for line in result.stdout.strip().split("\n"):
+                            if line != "":
+                                retval.append(line)
+                    else:
+                        self.fail(f"error running command; cmd={cmd}, result={result}")
+                return retval
 
-                    def list_sub_dirs(path: str) -> List[str]:
-                        p = Path(path)
-                        retval = [entry.name for entry in path.iterdir() if entry.is_dir()]
-                        return retval
+            def get_file_size(expected_file: ExpectedFile) -> Tuple[bool, int]:
+                if conn:
+                    result = conn.run(f"stat -c '%s' {expected_file.path}", warn=True, hide=True)
+                    if result.ok:
+                        return True, int(result.stdout.strip())
+                return False, 0
 
-                    def find_files(path: str) -> List[str]:
-                        p = Path(path)
-                        retval = [entry.name for entry in path.iterdir() if entry.is_file()]
-                        return retval
+            def list_sub_dirs(path: str) -> List[str]:
+                return run_cmd(f"find {path} -maxdepth 1 -type d")
 
-                case JobType.REMOTE:
-                    conn = IntegrationTestUtils.get_test_docker_conn(
-                        self.test_configs, ContainerType.TARGET
-                    )
+            def find_files(path: str) -> List[str]:
+                return run_cmd(f"find {path} -maxdepth 1 -type f")
 
-                    def run_cmd(cmd: str) -> List[str]:
-                        retval: List[str] = []
-                        result = conn.run(cmd, warn=True, hide=True)
-                        if result.ok:
-                            for line in result.stdout.strip().split("\n"):
-                                if line != "":
-                                    retval.append(line)
-                        else:
-                            self.fail(f"error running command; cmd={cmd}, result={result}")
-                        return retval
-
-                    def get_file_size(expected_file: ExpectedFile) -> int:
-                        result = conn.run(
-                            f"stat -c '%s' {expected_file.path}", warn=True, hide=True
-                        )
-                        if result.ok:
-                            return True, int(result.stdout.strip())
-                        return False, 0
-
-                    def list_sub_dirs(path: str) -> List[str]:
-                        return run_cmd(f"find {path} -maxdepth 1 -type d")
-
-                    def find_files(path: str) -> List[str]:
-                        return run_cmd(f"find {path} -maxdepth 1 -type f")
-
-                case _:
-                    self.fail(f"unknown JobType; job_type={job_type}")
+            conn = IntegrationTestUtils.get_test_docker_conn(
+                self.test_configs, ContainerType.TARGET
+            )
 
             self.validate_expected_dirs(expected_data.dirs, list_sub_dirs, find_files)
             self.validate_expected_files(expected_data.files, get_file_size)
-
         finally:
             if conn is not None:
                 conn.close()
@@ -233,8 +237,8 @@ class ITBase(unittest.TestCase):
             if expected_dir.dirs is not None:
                 for expected_sub_dir in expected_dir.dirs:
                     if expected_sub_dir not in actual_sub_dirs:
-                        self.assertFail(
-                            f"expected_sub_dir was not present in dir; expected_sub_dir={expected_sub_dir.path}, dir={expected_dir.path}"
+                        self.fail(
+                            f"expected_sub_dir was not present in dir; expected_sub_dir={expected_sub_dir}, dir={expected_dir.path}"
                         )
                     actual_sub_dirs.remove(expected_sub_dir)
 

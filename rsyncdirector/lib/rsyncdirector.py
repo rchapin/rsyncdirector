@@ -1,3 +1,9 @@
+# This software is released under the Revised BSD License.
+# See LICENSE for details
+#
+# Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
+# All rights reserved.
+
 import logging
 import multiprocessing
 import os
@@ -5,29 +11,24 @@ import sys
 import time
 import traceback
 import rsyncdirector.lib.config as cfg
+import rsyncdirector.lib.metrics as metrics
 from apscheduler import events
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
 from rsyncdirector.lib.config import BlocksOnType, LockFileType
 from rsyncdirector.lib.envvars import EnvVars
+from rsyncdirector.lib.enums import RunResult
 from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
 from rsyncdirector.lib.rsync import Rsync
-from rsyncdirector.lib.metrics import (
-    Metrics,
-    BLOCKED_COUNTER,
-    BLOCKED_DURATION,
-    LOCK_FILES,
-    JOB_DURATION,
-    JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER,
-    RUNS_COMPLETED,
-)
+from rsyncdirector.lib.command import Command
+from rsyncdirector.lib.metrics import Metrics
 from rsyncdirector.lib.utils import Utils
 from enum import Enum
 from fabric import Connection
 from invoke import run
 from threading import Event, Thread
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 
 class LockFileAction(Enum):
@@ -163,7 +164,7 @@ class RsyncDirector(Thread):
 
                     wait_time = block["wait_time"]
                     self.logger.info(f"job is blocked; job_id={job_id}, wait_time={wait_time}")
-                    BLOCKED_COUNTER.labels(job_id).inc()
+                    metrics.BLOCKED_COUNTER.labels(job_id).inc()
                     self.__interruptable_wait(wait_time)
 
         # Once all blocks have been satisfied or if there are no blocks configured just return True
@@ -200,15 +201,24 @@ class RsyncDirector(Thread):
             if self.is_shutdown():
                 self.logger.info(f"We have been shutdown, exiting jobs execution loop")
                 break
-            with JOB_DURATION.labels(job["id"]).time():
+            with metrics.JOB_DURATION.labels(job["id"]).time():
                 self.__run_job(job)
 
         self.scheduled_job_running = False
         self.logger.info("exec_job finished")
-        RUNS_COMPLETED.labels(self.rsync_id).inc()
+        metrics.RUNS_COMPLETED.labels(self.rsync_id).inc()
 
     @staticmethod
-    def __exec_process(logger, job, sync):
+    def __exec_process_command(
+        logger: logging.Logger, result_queue: multiprocessing.Queue, command: str, args: List[str]
+    ) -> None:
+        cmd = Command(logger, result_queue, command, args)
+        cmd.run()
+
+    @staticmethod
+    def __exec_process_rsync(
+        logger: logging.Logger, result_queue: multiprocessing.Queue, job: Dict, sync: Dict
+    ) -> None:
         user = job["user"] if "user" in job else None
         host = job["host"] if "host" in job else None
         port = job["port"] if "port" in job else None
@@ -217,7 +227,7 @@ class RsyncDirector(Thread):
         # TODO: this can get removed once we validate and clean-up the configs on start-up.
         job_type = cfg.JobType[job["type"].upper()]
 
-        rsync = Rsync(logger, job_type, sync, user, host, port, private_key_path)
+        rsync = Rsync(logger, result_queue, job_type, sync, user, host, port, private_key_path)
         rsync.run()
 
     @staticmethod
@@ -244,6 +254,42 @@ class RsyncDirector(Thread):
     @staticmethod
     def __get_pid_file_name(id: str) -> str:
         return f"rsyncdirector-{id}.pid"
+
+    def __get_process_command(
+        self, action: Dict
+    ) -> Tuple[multiprocessing.Process, multiprocessing.Queue]:
+        result_queue = multiprocessing.Queue()
+        args = action["args"] if "args" in action else None
+        process = multiprocessing.Process(
+            target=RsyncDirector.__exec_process_command,
+            args=(
+                self.logger,
+                result_queue,
+                action["command"],
+                args,
+            ),
+        )
+        return process, result_queue
+
+    def __get_process_rsync(
+        self, job: Dict, action: Dict
+    ) -> Tuple[multiprocessing.Process, multiprocessing.Queue]:
+        result_queue = multiprocessing.Queue()
+        sync = {
+            "source": action["source"],
+            "dest": action["dest"],
+            "opts": action["opts"],
+        }
+        process = multiprocessing.Process(
+            target=RsyncDirector.__exec_process_rsync,
+            args=(
+                self.logger,
+                result_queue,
+                job,
+                sync,
+            ),
+        )
+        return process, result_queue
 
     def __is_blocked_local(blocks_on_conf: Dict, logger: logging.Logger) -> bool:
         path = blocks_on_conf["path"]
@@ -342,14 +388,14 @@ class RsyncDirector(Thread):
                                 f"unable to delete lock file; lock_file_type={lock_file_type}, file_path={file_path}"
                             )
                             sys.exit(1)
-                        LOCK_FILES.labels(job_id).dec()
+                        metrics.LOCK_FILES.labels(job_id).dec()
                     case LockFileAction.WRITE:
                         if pid_file.write() is not True:
                             self.logger.fatal(
                                 f"unable to write lock file; lock_file_type={lock_file_type}, file_path={file_path}"
                             )
                             sys.exit(1)
-                        LOCK_FILES.labels(job_id).inc()
+                        metrics.LOCK_FILES.labels(job_id).inc()
                         pass
                     case _:
                         self.logger.fatal(
@@ -367,13 +413,13 @@ class RsyncDirector(Thread):
     def __run_job(self, job):
         job_id = job["id"]
         if "blocks_on" in job:
-            with BLOCKED_DURATION.labels(job["id"]).time():
+            with metrics.BLOCKED_DURATION.labels(job["id"]).time():
                 continue_processing_job = self.__block(job_id, job["blocks_on"])
                 if not continue_processing_job:
                     self.logger.info(
                         f"block condition was not removed, not continuing processing job; job_id={job_id}"
                     )
-                    JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc()
+                    metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc()
                     return
 
         # Write lock files in a try block so that we can ensure to delete them.
@@ -382,32 +428,67 @@ class RsyncDirector(Thread):
             if has_lock_files:
                 self.__lock_files(job["id"], job["lock_files"], LockFileAction.WRITE)
 
-            self.logger.info(f"Executing syncs for job; job={job}")
-            for sync in job["syncs"]:
+            self.logger.info(f"Executing actions for job; job={job}")
+            if "actions" not in job:
+                raise Exception(f"no actions defined in job; job={job}")
+
+            for action in job["actions"]:
+                action_id = action["id"]
                 if self.is_shutdown():
                     self.logger.info(
-                        f"We have been shutdown, exiting __run_job, sync execution loop"
+                        f"We have been shutdown, exiting __run_job, action execution loop"
                     )
                     break
 
-                # We run the rsync command in a separate process altogether so that we can kill it
+                # We run the action commands in a separate process altogether so that we can kill it
                 # if we need to.
-                self.logger.info(f"Executing sync; sync={sync}")
-                self.process = multiprocessing.Process(
-                    target=RsyncDirector.__exec_process,
-                    args=(
-                        self.logger,
-                        job,
-                        sync,
-                    ),
-                )
+                result_queue = None
+                match action["action"]:
+                    case "sync":
+                        self.process, result_queue = self.__get_process_rsync(job, action)
+                    case "command":
+                        self.process, result_queue = self.__get_process_command(action)
+                    case _:
+                        self.logger.fatal(f"Unknown acton; action={action["action"]}")
+                        sys.exit(1)
+
                 try:
                     self.process.start()
                     self.process.join()
+
+                    if self.process.exitcode != 0:
+                        self.logger.error(f"Process failed; exit_code: {self.process.exitcode}")
+                        metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc()
+                        return
+
+                    if result_queue and not result_queue.empty():
+                        try:
+                            # TODO: make the timeout configurable.
+                            result_msg = result_queue.get(block=True, timeout=2.0)
+                            run_result = result_msg[0]
+                            if run_result == RunResult.FAIL:
+                                result = result_msg[1]
+                                self.logger.error(
+                                    f"action failed, exiting job; job_id={job_id}, action_id={action_id}, "
+                                    f"result.stdout={result.stdout.strip()}, result.sterr={result.stderr.strip()}, "
+                                    f"result.return_code={result.return_code}, result={result_msg}"
+                                )
+                                metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
+                                    job_id, action_id
+                                ).inc()
+                                return
+                            self.logger.info(
+                                f"action suceeded; job_id={job_id}, action_id={action_id}, result={result_msg}"
+                            )
+                        except Exception as e:
+                            self.logger.error(f"reading from result queue; e={e}")
+
                 except Exception as e:
                     err_type = type(e).__name__
                     err_msg = str(e)
                     self.logger.error(f"running job: error_type={err_type}, err_msg={err_msg}")
+                    metrics.JOB_ABORTED_FOR_EXCEPTION_ERR.labels(job_id, action_id).inc()
+                    return
                 finally:
                     self.process.close()
                     self.process = None
