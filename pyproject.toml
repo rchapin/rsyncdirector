@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rsyncdirector"
-version = "0.1.1"
+version = "0.1.2"
 authors = [{ name = "Ryan Chapin", email = "rchapin@nbinteractive.com" }]
 description = "A tool to orchestrate rsyncing of data between multiple machines and instances of rsyncdirector"
 license = { file = "LICENSE" }

@@ -169,6 +169,10 @@ pip-compile -v --no-emit-trusted-host --no-emit-index-url requirements.in
 pip-compile -v --no-emit-trusted-host --no-emit-index-url requirements_test.in
 ```
 
+#### Vulnerability Scanning
+
+If you have a [Safety](https://safetycli.com) account you can run `safety scan` to check for any dependency vulnerabilities.
+
 ## Notes
 
 [This is the solution for terminating a multi process/thread in Python](https://cuyu.github.io/python/2016/08/15/Terminate-multiprocess-in-Python-correctly-and-gracefully).  It was the solution for being able to kill a running rsync job.  Actually run the rsync command in a separate process that I can then kill if we receive a SIGTERM for the parent process.
