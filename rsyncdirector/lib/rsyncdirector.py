@@ -46,7 +46,7 @@ class RsyncDirector(Thread):
     METRICS_DEFAULT_STARTUP_RETRY_WAIT_SECONDS = float(2)
     METRICS_DEFAULT_STARTUP_NUM_RETRIES = 3
 
-    PID_FILE_DIR_DEFAULT = "/var/run/rsyncdirector"
+    PID_FILE_DIR_DEFAULT = "/etc/rsyncdirector"
 
     SUB_PROCESS_JOIN_SECONDS = float(5)
 
