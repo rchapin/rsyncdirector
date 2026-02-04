@@ -1,3 +1,4 @@
+import io
 import sys
 import logging
 import structlog
@@ -7,7 +8,14 @@ from structlog.stdlib import BoundLogger
 Logger = Union[BoundLogger, Any]
 
 
-def get_logger(name: str, log_level: str) -> Logger:
+def get_logger(
+    name: str, log_level: str, cache_logger: bool = True, force_reconfig: bool = False
+) -> Logger:
+    if force_reconfig:
+        structlog.reset_defaults()
+        # Also clear handlers from the root logger so we don't duplicate them
+        logging.getLogger().handlers.clear()
+
     # These run for BOTH thise code and third-party library logs.
     shared_processors = [
         structlog.contextvars.merge_contextvars,
@@ -32,7 +40,7 @@ def get_logger(name: str, log_level: str) -> Logger:
             ],
             logger_factory=structlog.stdlib.LoggerFactory(),
             wrapper_class=structlog.stdlib.BoundLogger,
-            cache_logger_on_first_use=True,
+            cache_logger_on_first_use=cache_logger,
         )
 
     # We create a Formatter that renders everything as JSON, regardless of how other libraries are
@@ -52,4 +60,35 @@ def get_logger(name: str, log_level: str) -> Logger:
     root_logger.addHandler(handler)
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
-    return structlog.get_logger(name)
+    logger = structlog.get_logger(name)
+    return logger.bind(process="rsyncdirector")
+
+
+class LogStreamer(io.TextIOBase):
+    """A file-like object that redirects writes to a logger."""
+
+    def __init__(self, logger: Logger, component: str):
+        self.logger = logger
+        self.buffer = ""
+
+    def write(self, message: str) -> int:
+        # Sub-processes often stream in chunks, not full lines so we buffer until we see a newline.
+        self.buffer += message
+        if "\n" in self.buffer:
+            lines = self.buffer.split("\n")
+
+            # Log all complete lines
+            for line in lines[:-1]:
+                clean_line = line.strip()
+                if clean_line:
+                    # This triggers the JSON output with all of the provided metadata.
+                    self.logger.info(clean_line)
+
+            # Keep the partial line for the next write
+            self.buffer = lines[-1]
+        return len(message)
+
+    def flush(self):
+        if self.buffer.strip():
+            self.logger.info(self.buffer.strip())
+            self.buffer = ""
