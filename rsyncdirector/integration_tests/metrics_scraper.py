@@ -9,10 +9,9 @@ import requests
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
-from logging import Logger
 from threading import Event, Lock, Thread
 from typing import Dict, List, Optional, Tuple
+from rsyncdirector.lib.logging import Logger
 
 
 @dataclass
@@ -52,7 +51,7 @@ class MetricsScraper(Thread):
 
         return "|".join(pairs)
 
-    def get_metrics(self) -> dict:
+    def get_metrics(self) -> Optional[dict]:
         self.metrics_lock.acquire_lock()
         retval = copy.deepcopy(self.metrics)
         self.metrics_lock.release_lock()
@@ -239,6 +238,6 @@ class WaitFor(object):
 
     @staticmethod
     def to_metric_key_and_value(metric: Metric) -> Tuple[str, float]:
-        labels_key = MetricsScraper.get_labels_key(metric.labels)
+        labels_key = "" if metric.labels is None else MetricsScraper.get_labels_key(metric.labels)
         key = metric.name if labels_key == "" else f"{metric.name}::{labels_key}"
         return "", 1.0

@@ -4,7 +4,6 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import os
 import sys
 import psutil
@@ -12,11 +11,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from fabric import Connection
 from typing import Tuple
+from rsyncdirector.lib.logging import Logger
 
 
 class PidFile(ABC):
 
-    def __init__(self, logger: logging.Logger, pid: int, path: str) -> None:
+    def __init__(self, logger: Logger, pid: int, path: str) -> None:
         self.logger = logger
         self.pid = pid
         self.path = path
@@ -30,7 +30,7 @@ class PidFile(ABC):
         pass
 
     @abstractmethod
-    def does_process_with_pid_exist(self) -> bool:
+    def does_process_with_pid_exist(self, pid: int) -> bool:
         pass
 
     @abstractmethod
@@ -75,7 +75,7 @@ class PidFile(ABC):
 
 class PidFileLocal(PidFile):
 
-    def __init__(self, logger: logging.Logger, pid: int, path: str) -> None:
+    def __init__(self, logger: Logger, pid: int, path: str) -> None:
         super().__init__(logger, pid, path)
 
     def delete(self) -> bool:
@@ -91,7 +91,7 @@ class PidFileLocal(PidFile):
             path.rmdir()
             return False, ""
 
-        file_exists = None
+        file_exists = False
         existing_pid = ""
         if path.is_file():
             # Read the existing file and get the pid if there is one
@@ -119,7 +119,7 @@ class PidFileLocal(PidFile):
 
 class PidFileRemote(PidFile):
 
-    def __init__(self, logger: logging.Logger, pid: int, path: str, conn: Connection) -> None:
+    def __init__(self, logger: Logger, pid: int, path: str, conn: Connection) -> None:
         super().__init__(logger, pid, path)
         self.conn = conn
 

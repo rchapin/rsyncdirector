@@ -12,25 +12,15 @@ from enum import Enum, auto
 from fabric import Connection
 from typing import List, Optional, Sequence, NamedTuple
 import docker
-import logging
 import os
 import random
 import string
-import sys
 import time
 import yaml
 from rsyncdirector.lib.envvars import EnvVars
+from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.utils import Utils
 from rsyncdirector.lib.config import JobType
-
-
-logging.basicConfig(
-    format="%(asctime)s,%(levelname)s,%(module)s,%(message)s",
-    level=logging.INFO,
-    stream=sys.stdout,
-)
-
-logger = logging.getLogger(__name__)
 
 
 class ContainerType(Enum):
@@ -278,31 +268,31 @@ class IntegrationTestUtils(object):
             ],
         )
 
-    @classmethod
-    def get_test_configs(cls) -> dict[str, str]:
+    @staticmethod
+    def get_test_configs(logger: Logger) -> dict[str, str]:
         """
-        Dynamically builds a named tuple from the env vars exported that are prefixed by the
-        ENV_VAR_PREFIX string.
+        Returns a dict of the env vars exported that are prefixed by the ENV_VAR_PREFIX string.
         """
         env_vars = EnvVars.get_env_vars(ENV_VAR_PREFIX)
         retval = {}
 
+        logger.info("Generating test configs dict with env_vars")
         for k, v in env_vars.items():
             # Generate a key by removing the prefix and converting to lower-case
             key = k.replace(f"{ENV_VAR_PREFIX}_", "").lower()
+            logger.info("env_var", key=k, value=v)
             retval[key] = v
 
         # Generate a log message of all of the test config values.
         entries = [f"{k}:{v}" for k, v in sorted(retval.items())]
         log_msg = "\n".join(entries)
-        logger.info(f"Generating test configs dict with keys:\n{log_msg}")
         return retval
 
     @staticmethod
-    def restart_docker_containers(configs):
+    def restart_docker_containers(logger: Logger, configs: dict[str, str]):
         client = docker.from_env()
-        IntegrationTestUtils.stop_docker_containers(configs, client)
-        IntegrationTestUtils.start_docker_containers(configs, client)
+        IntegrationTestUtils.stop_docker_containers(logger, configs, client)
+        IntegrationTestUtils.start_docker_containers(logger, configs, client)
         client.close()
 
     @staticmethod
@@ -340,7 +330,7 @@ class IntegrationTestUtils(object):
             os.environ.pop(k)
 
     @staticmethod
-    def start_docker_containers(test_configs, docker_client):
+    def start_docker_containers(logger: Logger, test_configs, docker_client):
         containers = [
             (test_configs["container_target_name"], test_configs["container_target_port"]),
             (test_configs["container_remote_name"], test_configs["container_remote_port"]),
@@ -355,10 +345,10 @@ class IntegrationTestUtils(object):
                 auto_remove=True,
             )
 
-            IntegrationTestUtils.wait_for_docker_ssh(port=port)
+            IntegrationTestUtils.wait_for_docker_ssh(logger, port)
 
     @staticmethod
-    def stop_docker_containers(test_configs, docker_client=None):
+    def stop_docker_containers(logger: Logger, test_configs: dict[str, str], docker_client=None):
         client = docker_client if docker_client is not None else docker.from_env()
 
         for container_name in [
@@ -379,8 +369,8 @@ class IntegrationTestUtils(object):
                     )
                     if is_running:
                         logger.info(
-                            f"Test docker container is not yet stopped, "
-                            f"sleeping for [{WAIT_FOR_DOCKER_SHUTDOWN_TIME}] seconds"
+                            "Test docker container is not yet stopped, sleeping",
+                            seconds=WAIT_FOR_DOCKER_SHUTDOWN_TIME,
                         )
                         time.sleep(WAIT_FOR_DOCKER_SHUTDOWN_TIME)
                     else:
@@ -390,20 +380,21 @@ class IntegrationTestUtils(object):
             client.close()
 
     @staticmethod
-    def wait_for_docker_ssh(port):
+    def wait_for_docker_ssh(logger: Logger, port: str) -> None:
         while True:
 
             cmd = f"nc -v -w 1 localhost {port}"
             returncode, _, _ = Utils.run_bash_cmd(cmd=cmd, timeout_seconds=5)
             if returncode != 0:
                 logger.info(
-                    f"Test docker container is not yet listening for ssh connections on port={port}, "
-                    f"sleeping for [{WAIT_FOR_DOCKER_SSH_SLEEP_TIME}] seconds"
+                    "Test docker container is not yet listening for ssh connections, sleeping",
+                    port=port,
+                    seconds=WAIT_FOR_DOCKER_SSH_SLEEP_TIME,
                 )
                 time.sleep(WAIT_FOR_DOCKER_SSH_SLEEP_TIME)
             else:
                 logger.info(
-                    f"Test docker container is accepting connections ssh connections on port={port}"
+                    "Test docker container is accepting connections ssh connections", port=port
                 )
                 break
 

@@ -4,22 +4,18 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import os
 import psutil
 import random
 import sys
 from fabric import Connection
 from pathlib import Path
+from rsyncdirector.lib import logging
 from rsyncdirector.lib.pidfile import PidFile, PidFileLocal, PidFileRemote
 from rsyncdirector.integration_tests.it_base import ITBase
 from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType
 from typing import Callable, Tuple
 
-logging.basicConfig(
-    format="%(asctime)s,%(levelname)s,%(module)s,%(message)s", level=logging.INFO, stream=sys.stdout
-)
-logger = logging.getLogger(__name__)
 
 FILE_NAME = "pid_file.txt"
 PID = 647
@@ -31,12 +27,13 @@ ExecRemoteFunc = Callable[[Connection], None]
 class ITPidFile(ITBase):
 
     def setUp(self):
-        logger.info("Running setup")
+        self.logger = logging.get_logger("metrics-scraper-inttest", "INFO")
+        self.logger.info("Running setup")
         self.setup_base()
-        IntegrationTestUtils.restart_docker_containers(self.test_configs)
+        IntegrationTestUtils.restart_docker_containers(self.logger, self.test_configs)
 
     def tearDown(self):
-        IntegrationTestUtils.stop_docker_containers(self.test_configs)
+        IntegrationTestUtils.stop_docker_containers(self.logger, self.test_configs)
 
     #
     # Local --------------------------------------------------------------------
@@ -198,7 +195,7 @@ class ITPidFile(ITBase):
         pid = PID if pid is not None else os.getpid()
         return (
             PidFileLocal(
-                logger=logger,
+                logger=self.logger,
                 path=path,
                 pid=pid,
             ),
@@ -258,7 +255,7 @@ class ITPidFile(ITBase):
         # FIXME: broken logic here
         pid = PID if pid is None else os.getpid()
         return PidFileRemote(
-            logger=logger,
+            logger=self.logger,
             path=REMOTE_PATH,
             pid=pid,
             conn=conn,

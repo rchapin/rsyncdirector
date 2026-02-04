@@ -4,27 +4,24 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import unittest
 import os
 import psutil
 import rsyncdirector.lib.config as cfg
 import shutil
-import sys
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
-from typing import Callable, Dict, List, Set, Tuple
+from typing import Callable, List, Set, Tuple
 from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType
+from rsyncdirector.lib import logging
+from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
 from rsyncdirector.lib.config import JobType
-
-logging.basicConfig(
-    format="%(asctime)s,%(levelname)s,%(module)s,%(message)s",
-    level=logging.INFO,
-    stream=sys.stdout,
+from rsyncdirector.integration_tests.metrics_scraper import (
+    MetricsScraper,
+    MetricsScraperCfg,
 )
-
-logger = logging.getLogger(__name__)
 
 DOCKER_SSH_WAIT_TIME = 1
 
@@ -53,6 +50,21 @@ class ExpectedData(object):
 
 class ITBase(unittest.TestCase):
 
+    def setUp(self):
+        self.logger = logging.get_logger("rsyncdirector-inttest", "INFO")
+        self.logger.info("Running setup")
+        self.setup_base()
+        IntegrationTestUtils.restart_docker_containers(self.logger, self.test_configs)
+
+        metrics_scraper_cfg = MetricsScraperCfg(
+            addr=self.test_configs["metrics_scraper_target_addr"],
+            port=self.test_configs["metrics_scraper_target_port"],
+            scrape_interval=timedelta(seconds=0.25),
+            conn_timeout=timedelta(seconds=1),
+        )
+        self.metrics_scraper = MetricsScraper(metrics_scraper_cfg, self.logger)
+        self.metrics_scraper.start()
+
     def get_default_test_data(self, job_type: JobType) -> Tuple[ExpectedData, str]:
         expected_data = ExpectedData(job_type)
         source_data_dir = os.path.join(self.test_configs["test_data_dir"], "d1")
@@ -73,8 +85,8 @@ class ITBase(unittest.TestCase):
         return expected_data, source_data_dir
 
     def setup_base(self) -> None:
-        logger.info("Running setup_base")
-        self.test_configs = IntegrationTestUtils.get_test_configs()
+        self.logger.info("Running setup_base")
+        self.test_configs = IntegrationTestUtils.get_test_configs(self.logger)
         self.waitfor_timeout_seconds = float(self.test_configs["waitfor_timeout_seconds"])
         self.waitfor_poll_interval = float(self.test_configs["waitfor_poll_interval"])
 
@@ -103,15 +115,17 @@ class ITBase(unittest.TestCase):
                     found_process = True
                     try:
                         process = psutil.Process(pid)
-                        logger.info(
-                            "Terminating existing process listing on the given port; "
-                            f"process.name={process.name()}, pid={pid}, port={port}"
+                        self.logger.info(
+                            "Terminating existing process listing on the given port",
+                            process_name=process.name(),
+                            pid=pid,
+                            port=port,
                         )
                         process.kill()
                         process.wait(timeout=3)
-                        logger.info(f"process terminated; process.name={process.name()}, pid={pid}")
+                        self.logger.info("process terminated", process_name=process.name(), pid=pid)
                     except psutil.NoSuchProcess as e:
-                        logger.info(f"process is no longer extant; pid={pid}; e={e}")
+                        self.logger.info("process is no longer extant", pid=pid, error=e)
                         return None
                     except Exception as e:
                         self.fail(
@@ -121,14 +135,14 @@ class ITBase(unittest.TestCase):
                     break
 
         if not found_process:
-            logger.info(f"no process found listening on port {port}.")
+            self.logger.info("no process found listening on port", port=port)
 
     GetFileSize = Callable[[ExpectedFile], Tuple[bool, int]]
     ListSubDirs = Callable[[str], List[str]]
     FindFiles = Callable[[str], List[str]]
 
     def validate_post_conditions(self, expected_data: ExpectedData) -> None:
-        logger.info("Validating post conditions")
+        self.logger.info("Validating post conditions")
 
         match expected_data.job_type:
             case JobType.LOCAL:

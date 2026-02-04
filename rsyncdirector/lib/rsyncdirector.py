@@ -4,10 +4,10 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import multiprocessing
 import os
 import queue
+import structlog
 import sys
 import time
 import traceback
@@ -21,6 +21,7 @@ from rsyncdirector.lib.config import BlocksOnType, LockFileType
 from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.enums import RunResult
 from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
+from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.rsync import Rsync
 from rsyncdirector.lib.command import Command
 from rsyncdirector.lib.metrics import Metrics
@@ -28,7 +29,7 @@ from enum import Enum
 from fabric import Connection
 from invoke import run
 from threading import Event, Thread
-from typing import List, Dict, Tuple
+from typing import Any, List, Dict, Tuple
 
 
 class LockFileAction(Enum):
@@ -50,7 +51,7 @@ class RsyncDirector(Thread):
 
     SUB_PROCESS_JOIN_SECONDS = float(5)
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: Logger, env_vars: Dict):
         Thread.__init__(self)
         self.logger = logger
         # Reference to the subprocess in which we will run the actual rsync command
@@ -67,7 +68,6 @@ class RsyncDirector(Thread):
         # An event object to be used for interruptable "sleeping".
         self.wait_event = Event()
 
-        env_vars = EnvVars.get_env_vars(cfg.ENV_VAR_PREFIX)
         if cfg.CONFIG_ENV_VAR_KEY not in env_vars:
             raise Exception(
                 "Required env var defining path to config file is not defined; "
@@ -84,10 +84,6 @@ class RsyncDirector(Thread):
             if cfg.RUNONCE_ENV_VAR_KEY in env_vars and env_vars[cfg.RUNONCE_ENV_VAR_KEY] == "1"
             else False
         )
-        if cfg.LOGLEVEL_ENV_VAR_KEY in env_vars:
-            # FIXME: Updating the log level isn't working yet.
-            level = env_vars[cfg.LOGLEVEL_ENV_VAR_KEY].upper()
-            logger.setLevel(level=level)
 
         # TODO: validate configs
         self.configs = cfg.Config.load_configs(self.config)
@@ -210,14 +206,14 @@ class RsyncDirector(Thread):
 
     @staticmethod
     def __exec_process_command(
-        logger: logging.Logger, result_queue: multiprocessing.Queue, command: str, args: List[str]
+        logger: Logger, result_queue: multiprocessing.Queue, command: str, args: List[str]
     ) -> None:
         cmd = Command(logger, result_queue, command, args)
         cmd.run()
 
     @staticmethod
     def __exec_process_rsync(
-        logger: logging.Logger, result_queue: multiprocessing.Queue, job: Dict, sync: Dict
+        logger: Logger, result_queue: multiprocessing.Queue, job: Dict, sync: Dict
     ) -> None:
         user = job["user"] if "user" in job else None
         host = job["host"] if "host" in job else None
@@ -292,7 +288,7 @@ class RsyncDirector(Thread):
         return process, result_queue
 
     @staticmethod
-    def __is_blocked_local(blocks_on_conf: Dict, logger: logging.Logger) -> bool:
+    def __is_blocked_local(blocks_on_conf: Dict, logger: Logger) -> bool:
         path = blocks_on_conf["path"]
         if os.path.exists(path):
             block_file_pid = None

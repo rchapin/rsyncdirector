@@ -4,8 +4,8 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import multiprocessing
+from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.enums import RunResult
 from invoke import run
 from typing import List
@@ -14,7 +14,7 @@ from typing import List
 class Command(object):
     def __init__(
         self,
-        logger: logging.Logger,
+        logger: Logger,
         result_queue: multiprocessing.Queue,
         command: str,
         args: List[str] | None = None,

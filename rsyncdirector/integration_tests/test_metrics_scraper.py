@@ -4,13 +4,10 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import getpass
 import logging
-import os
-import sys
 import unittest
-from pathlib import Path, PurePath
 from dataclasses import dataclass
+from rsyncdirector.lib import logging
 from rsyncdirector.integration_tests.metrics_scraper import MetricsScraper
 
 INPUT = """
@@ -57,16 +54,10 @@ my_float_histogram_count 1.0
 my_float_histogram_sum 0.75
 """
 
-logging.basicConfig(
-    format="%(asctime)s,%(levelname)s,%(module)s,%(message)s",
-    level=logging.INFO,
-    stream=sys.stdout,
-)
-
-logger = logging.getLogger(__name__)
-
 
 class MetricsScraperTest(unittest.TestCase):
+    def setUp(self):
+        self.logger = logging.get_logger("metrics-scraper-inttest", "INFO")
 
     def test_get_labels(self):
         test_cases = [
@@ -175,7 +166,7 @@ class MetricsScraperTest(unittest.TestCase):
             input_data = tc["input_data"]
             expected = tc["expected"]
             with self.subTest(name, input_data=input_data, expected=expected):
-                actual = MetricsScraper.parse_metrics(input_data, logger)
+                actual = MetricsScraper.parse_metrics(input_data, self.logger)
                 for actual_k, actual_v in actual.items():
                     if not actual_k in expected:
                         self.fail(f"actual key was not in expected; actual_k={actual_k}")

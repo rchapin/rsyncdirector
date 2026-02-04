@@ -4,10 +4,8 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import os
 import stat
-import sys
 import rsyncdirector.lib.config as cfg
 from datetime import timedelta
 from rsyncdirector.integration_tests.it_base import ITBase, ExpectedData, ExpectedDir, ExpectedFile
@@ -25,19 +23,13 @@ from rsyncdirector.integration_tests.int_test_utils import (
 )
 from rsyncdirector.integration_tests.metrics_scraper import (
     Metric,
-    MetricsScraper,
-    MetricsScraperCfg,
     MetricsConditions,
     WaitFor,
 )
+from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
 from rsyncdirector.lib.config import JobType
-from typing import Sequence
 
-logging.basicConfig(
-    format="%(asctime)s,%(levelname)s,%(module)s,%(message)s", level=logging.INFO, stream=sys.stdout
-)
-logger = logging.getLogger(__name__)
 
 RUNONCE_ENV_VAR_KEY = f"{cfg.ENV_VAR_PREFIX}_{cfg.ENV_VAR_RUNONCE}"
 RUNONCE_ENV_VAR = {RUNONCE_ENV_VAR_KEY: "1"}
@@ -50,23 +42,9 @@ ls -al /var/tmp/
 
 class ITRsyncDirector(ITBase):
 
-    def setUp(self):
-        logger.info("Running setup")
-        self.setup_base()
-        IntegrationTestUtils.restart_docker_containers(self.test_configs)
-
-        metrics_scraper_cfg = MetricsScraperCfg(
-            addr=self.test_configs["metrics_scraper_target_addr"],
-            port=self.test_configs["metrics_scraper_target_port"],
-            scrape_interval=timedelta(seconds=0.25),
-            conn_timeout=timedelta(seconds=1),
-        )
-        self.metrics_scraper = MetricsScraper(metrics_scraper_cfg, logger)
-        self.metrics_scraper.start()
-
     def tearDown(self):
         self.metrics_scraper.shutdown()
-        IntegrationTestUtils.stop_docker_containers(self.test_configs)
+        IntegrationTestUtils.stop_docker_containers(self.logger, self.test_configs)
 
     def run_rsyncdirector(self, override_configs: dict[str, str] | None = None) -> RsyncDirector:
         config_path = os.path.join(
@@ -77,8 +55,9 @@ class ITRsyncDirector(ITBase):
             for k, v in override_configs.items():
                 os.environ[k] = v
 
-        logger.info("Starting RsyncDirector")
-        rsyncdirector = RsyncDirector(logger)
+        env_vars = EnvVars.get_env_vars(cfg.ENV_VAR_PREFIX)
+        self.logger.info("Starting RsyncDirector")
+        rsyncdirector = RsyncDirector(self.logger, env_vars)
         rsyncdirector.start()
 
         # Unset any envs so that we do not pollute any following tests
@@ -250,7 +229,7 @@ class ITRsyncDirector(ITBase):
                 ]
             )
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=self.waitfor_timeout_seconds),
@@ -315,7 +294,7 @@ class ITRsyncDirector(ITBase):
             ]
         )
         WaitFor.metrics(
-            logger=logger,
+            logger=self.logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
             timeout=timedelta(seconds=self.waitfor_timeout_seconds),
@@ -323,7 +302,7 @@ class ITRsyncDirector(ITBase):
         )
         # Once we see that we have been blocked at least once, remove the lock file and the
         # rsyncdirector should continue executing the job.
-        logger.info(f"removing local block file; local_block_file_path={local_block_file_path}")
+        self.logger.info("removing local block file", local_block_file_path=local_block_file_path)
         os.remove(local_block_file_path)
 
         rsyncdirector.join(timeout=5.0)
@@ -395,14 +374,15 @@ class ITRsyncDirector(ITBase):
                 metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)]
             )
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=self.waitfor_timeout_seconds),
                 poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
-            logger.info(
-                f"removing remote block file; remote_block_file_path={remote_block_file_path}"
+            self.logger.info(
+                "removing remote block file",
+                remote_block_file_path=remote_block_file_path,
             )
             result = conn.run(f"rm {remote_block_file_path}", warn=True, hide=True)
             if not result.ok:
@@ -414,13 +394,16 @@ class ITRsyncDirector(ITBase):
                 metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=2.0)]
             )
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=self.waitfor_timeout_seconds),
                 poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
-            logger.info(f"removing local block file; local_block_file_path={local_block_file_path}")
+            self.logger.info(
+                "removing local block file",
+                local_block_file_path=local_block_file_path,
+            )
             os.remove(local_block_file_path)
 
         except Exception as e:
@@ -511,13 +494,13 @@ class ITRsyncDirector(ITBase):
                 ]
             )
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=self.waitfor_timeout_seconds),
                 poll_interval=timedelta(seconds=self.waitfor_poll_interval),
             )
-            logger.info("verified metrics for two lock files")
+            self.logger.info("verified metrics for two lock files")
 
             # Confirm that both of the lock files exist
             our_pid = os.getpid()
@@ -582,7 +565,7 @@ class ITRsyncDirector(ITBase):
         )
         # Wait for 90 seconds because the cron should run within 60.
         WaitFor.metrics(
-            logger=logger,
+            logger=self.logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
             timeout=timedelta(seconds=90),
@@ -717,7 +700,7 @@ class ITRsyncDirector(ITBase):
                 ]
             )
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=self.waitfor_timeout_seconds),
@@ -800,7 +783,7 @@ class ITRsyncDirector(ITBase):
             )
             # Wait for 90 seconds because the cron should run within 60.
             WaitFor.metrics(
-                logger=logger,
+                logger=self.logger,
                 metrics_scraper=self.metrics_scraper,
                 conditions=metrics_conditions,
                 timeout=timedelta(seconds=90),
@@ -865,7 +848,7 @@ class ITRsyncDirector(ITBase):
             metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)]
         )
         WaitFor.metrics(
-            logger=logger,
+            logger=self.logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
             timeout=timedelta(seconds=self.waitfor_timeout_seconds),
@@ -873,7 +856,7 @@ class ITRsyncDirector(ITBase):
         )
         # Once we see that we have been blocked at least once, remove the lock file and the
         # rsyncdirector should continue executing the job.
-        logger.info(f"removing local block file; local_block_file_path={lock_file_path}")
+        self.logger.info("removing local block file", local_block_file_path=lock_file_path)
         os.remove(lock_file_path)
 
         # Wait until we see metrics that indicate that we have written the lock file.
@@ -887,7 +870,7 @@ class ITRsyncDirector(ITBase):
             ]
         )
         WaitFor.metrics(
-            logger=logger,
+            logger=self.logger,
             metrics_scraper=self.metrics_scraper,
             conditions=metrics_conditions,
             timeout=timedelta(seconds=self.waitfor_timeout_seconds),
