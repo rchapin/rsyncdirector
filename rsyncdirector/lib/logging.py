@@ -29,6 +29,9 @@ def get_logger(
             }
         ),
         structlog.processors.EventRenamer("message"),
+         # Add a processor to inject constant key/value pairs
+        structlog.processors.dict_tracebacks,
+        lambda logger, method_name, event_dict: {**event_dict, "process": "rsyncdirector"},
     ]
 
     if not structlog.is_configured():
@@ -60,8 +63,7 @@ def get_logger(
     root_logger.addHandler(handler)
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
-    logger = structlog.get_logger(name)
-    return logger.bind(process="rsyncdirector")
+    return structlog.get_logger(name)
 
 
 class LogStreamer(io.TextIOBase):
