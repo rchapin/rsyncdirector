@@ -9,14 +9,18 @@ Logger = Union[BoundLogger, Any]
 
 
 def get_logger(
-    name: str, log_level: str, cache_logger: bool = True, force_reconfig: bool = False
+    name: str,
+    log_level: str,
+    cache_logger: bool = True,
+    force_reconfig: bool = False,
+    const_kvs: dict[str, str] | None = None,
 ) -> Logger:
     if force_reconfig:
         structlog.reset_defaults()
         # Also clear handlers from the root logger so we don't duplicate them
         logging.getLogger().handlers.clear()
 
-    # These run for BOTH thise code and third-party library logs.
+    # These run for BOTH the logger created here and third-party library logs.
     shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.TimeStamper(fmt="iso", key="@timestamp"),
@@ -29,10 +33,15 @@ def get_logger(
             }
         ),
         structlog.processors.EventRenamer("message"),
-         # Add a processor to inject constant key/value pairs
         structlog.processors.dict_tracebacks,
-        lambda logger, method_name, event_dict: {**event_dict, "process": "rsyncdirector"},
     ]
+
+    if const_kvs is not None:
+        # Add processors to inject a set of constant key/value pairs.
+        for k, v in const_kvs.items():
+            shared_processors.append(
+                lambda logger, method_name, event_dict, key=k, value=v: {**event_dict, key: value}
+            )
 
     if not structlog.is_configured():
         structlog.configure(
@@ -70,7 +79,7 @@ class LogStreamer(io.TextIOBase):
     """A file-like object that redirects writes to a logger."""
 
     def __init__(self, logger: Logger, component: str):
-        self.logger = logger
+        self.logger = logger.bind(component=component)
         self.buffer = ""
 
     def write(self, message: str) -> int:

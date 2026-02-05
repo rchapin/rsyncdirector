@@ -81,7 +81,7 @@ class MetricsScraper(Thread):
                 err_count = err_count + 1
                 # We never re-raise the exception, just keep trying until we are shutdown.
                 if err_count % 10 == 0:
-                    self.logger.info(f"metrics scraper exception; e={e}")
+                    self.logger.info("metrics scraper", exception=e)
 
             time.sleep(self._cfg.scrape_interval.total_seconds())
         self.logger.info("exiting run....")

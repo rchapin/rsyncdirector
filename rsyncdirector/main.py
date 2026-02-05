@@ -19,18 +19,21 @@ def signal_handler(
     logger: Logger, rsyncdirector: RsyncDirector, signal_number: int, _frame: FrameType | None
 ) -> None:
     if signal_number == signal.SIGHUP:
-        logger.info(f"Executing run_once job after catching signal; signal_number={signal_number}")
+        logger.info("Executing run_once job after catching signal", signal_number=signal_number)
         rsyncdirector.schedule_runonce_job()
     else:
-        logger.info(f"Shutting down after catching signal; signal_number={signal_number}")
+        logger.info("Shutting down after catching signal", signal_number=signal_number)
         rsyncdirector.shutdown()
 
 
 def main():
     env_vars = EnvVars.get_env_vars(config.ENV_VAR_PREFIX)
     log_level = env_vars[config.ENV_VAR_LOGLEVEL] if config.ENV_VAR_LOGLEVEL in env_vars else "INFO"
-    logger = logging.get_logger("rsyncdirector", log_level)
-    logger.info("application_start", version="1.0.0", foo="blah")
+    logger = logging.get_logger(
+        name="rsyncdirector",
+        log_level=log_level,
+        const_kvs=dict(process="rsyncdirector"),
+    )
 
     try:
         rsyncdirector = RsyncDirector(logger, env_vars)

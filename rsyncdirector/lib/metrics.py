@@ -2,7 +2,7 @@ from flask import Flask
 from typing import Any, Callable, Iterable, Sequence
 from prometheus_client import Counter, Gauge, Histogram, Metric, generate_latest, start_http_server
 from rsyncdirector.lib.utils import Utils
-import logging
+from rsyncdirector.lib.logging import Logger
 import time
 
 NAME = "metrics"
@@ -91,8 +91,8 @@ LOCK_FILES = Gauge("lock_files", "Number of currently existing lock files", labe
 
 
 class Metrics(object):
-    def __init__(self, logger: logging.Logger, addr: str, port: str) -> None:
-        self.logger = logger
+    def __init__(self, logger: Logger, addr: str, port: str) -> None:
+        self.logger = logger.bind(address=addr, port=port)
         self.addr = addr
         self.port = port
         self.app = Flask(NAME)
@@ -125,11 +125,9 @@ class Metrics(object):
                 timeout=timeout,
             )
 
-            self.logger.info(f"Metrics http server started on http://{self.addr}:{self.port}")
+            self.logger.info("Metrics http server started")
         else:
-            self.logger.info(
-                f"Metrics http server already running on http://{self.addr}:{self.port}"
-            )
+            self.logger.info("Metrics http server already running")
 
     def stop(self):
         if self.running:

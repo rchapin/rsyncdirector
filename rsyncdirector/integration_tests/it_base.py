@@ -51,7 +51,13 @@ class ExpectedData(object):
 class ITBase(unittest.TestCase):
 
     def setUp(self):
-        self.logger = logging.get_logger("rsyncdirector-inttest", "INFO")
+        self.logger = logging.get_logger(
+            name="rsyncdirector-inttest",
+            log_level="INFO",
+            const_kvs=dict(process="rsyncdirector-inttest"),
+            cache_logger=False,
+            force_reconfig=True,
+        )
         self.logger.info("Running setup")
         self.setup_base()
         IntegrationTestUtils.restart_docker_containers(self.logger, self.test_configs)

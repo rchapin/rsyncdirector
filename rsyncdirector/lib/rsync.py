@@ -4,8 +4,8 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import multiprocessing
+from rsyncdirector.lib.logging import Logger, LogStreamer
 from rsyncdirector.lib.config import JobType
 from rsyncdirector.lib.enums import RunResult
 from invoke import run
@@ -15,7 +15,7 @@ from typing import Dict
 class Rsync(object):
     def __init__(
         self,
-        logger: logging.Logger,
+        logger: Logger,
         result_queue: multiprocessing.Queue,
         type: JobType,
         sync: Dict,
@@ -32,6 +32,7 @@ class Rsync(object):
         self.host = host
         self.port = port
         self.private_key_path = private_key_path
+        self.log_streamer = LogStreamer(self.logger, "rsync_out")
 
     def run(self) -> None:
         options = self.sync["opts"]
@@ -59,8 +60,11 @@ class Rsync(object):
 
         opts = " ".join(options)
         cmd = f"rsync {opts} {self.sync['source']} {remote_prefix}{self.sync['dest']}"
-        self.logger.info(f"running sync; cmd={cmd}")
-        result = run(cmd, warn=True)
+        self.logger.info("running sync", cmd=cmd)
+        # If we find that the output is lagging or coming in huge, delayed chunks, we can try adding
+        # pty=True to the ctx.run() call. This fools rsync into thinking it is talking to a real
+        # terminal, which often forces it to flush its output buffer more frequently.
+        result = run(cmd, warn=True, out_stream=self.log_streamer, err_stream=self.log_streamer)
         run_result = RunResult.FAIL
         if result and result.ok:
             run_result = RunResult.SUCCESS

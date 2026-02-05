@@ -4,13 +4,13 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import logging
 import requests
 import socket
 import string
 import subprocess
 import time
 from typing import Tuple
+from rsyncdirector.lib.logging import Logger
 
 
 class Utils(object):
@@ -26,7 +26,7 @@ class Utils(object):
         return input.translate(Utils.TRANS_TABLE)
 
     @staticmethod
-    def run_bash_cmd(cmd: str, timeout_seconds: int = None) -> Tuple[int, str, str]:
+    def run_bash_cmd(cmd: str, timeout_seconds: int = 0) -> Tuple[int, str, str]:
         result = subprocess.run(
             cmd, shell=True, timeout=timeout_seconds, capture_output=True, executable="/bin/bash"
         )
@@ -37,14 +37,22 @@ class Utils(object):
 
     @staticmethod
     def wait_for_http_service(
-        logger: logging.Logger,
+        logger: Logger,
         host: str,
         port: int,
         path: str,
-        wait_time: int,
+        wait_time: float,
         num_retries: int,
-        timeout: int = 1,
+        timeout: float = 1,
     ) -> None:
+        logger = logger.bind(
+            host=host,
+            port=port,
+            path=path,
+            num_retries=num_retries,
+            wait_time=wait_time,
+            timeout=timeout,
+        )
         num_tries = 0
         while True:
             response = None
@@ -61,15 +69,11 @@ class Utils(object):
                 if response.status_code == 200:
                     return
                 else:
-                    logger.info(
-                        f"waiting to retry for tcp port to accept connections; wait_time={wait_time}, host={host}, port={port}: {e}"
-                    )
+                    logger.info("waiting to retry for tcp port to accept connections")
                     time.sleep(wait_time)
 
             except Exception as e:
-                logger.info(
-                    f"waiting for http service to accept connections; host={host}, port={port}: {e}"
-                )
+                logger.info("waiting for http service to accept connections", exception=e)
             finally:
                 if response is not None:
                     response.close()

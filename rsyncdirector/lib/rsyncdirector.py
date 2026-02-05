@@ -7,7 +7,6 @@
 import multiprocessing
 import os
 import queue
-import structlog
 import sys
 import time
 import traceback
@@ -17,8 +16,8 @@ from apscheduler import events
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
+from importlib.metadata import version, PackageNotFoundError
 from rsyncdirector.lib.config import BlocksOnType, LockFileType
-from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.enums import RunResult
 from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
 from rsyncdirector.lib.logging import Logger
@@ -53,12 +52,12 @@ class RsyncDirector(Thread):
 
     def __init__(self, logger: Logger, env_vars: Dict):
         Thread.__init__(self)
-        self.logger = logger
         # Reference to the subprocess in which we will run the actual rsync command
         self.process = None
         self.metrics = None
         self.pid_file = None
         self.scheduled_job_running = False
+        self.version = RsyncDirector.__get_app_version()
 
         """
         The shutdown_flag is a threading event object that indicates whether the thread should be
@@ -88,6 +87,7 @@ class RsyncDirector(Thread):
         # TODO: validate configs
         self.configs = cfg.Config.load_configs(self.config)
         self.rsync_id = self.configs["rsync_id"]
+        self.logger = logger.bind(rsync_id=self.rsync_id, version=self.version)
 
         self.pid = os.getpid()
         pid_filename = RsyncDirector.__get_pid_file_name(self.rsync_id)
@@ -99,15 +99,16 @@ class RsyncDirector(Thread):
         pid_path = os.path.join(pid_file_dir, pid_filename)
         self.pid_file = PidFileLocal(logger=self.logger, pid=self.pid, path=pid_path)
         if not self.pid_file.write():
-            self.logger.error(f"unable to write pidfile, shutting down; pid_path={pid_path}")
+            self.logger.error("unable to write pidfile, shutting down", pid_path=pid_path)
             self.shutdown()
             return
+        self.logger = self.logger.bind(pid=self.pid)
 
         self.scheduler = BackgroundScheduler()
         self.scheduler.add_listener(self.__event_listener)
         self.cron_schedule = self.configs["cron_schedule"]
 
-    def __block(self, job_id: str, blocks_on_conf: dict) -> bool:
+    def __block(self, logger: Logger, job_id: str, blocks_on_conf: dict) -> bool:
         """
         Block execution of the job is there is a blocks_on configuration for the job and if the
         block condition is satisfied.
@@ -133,21 +134,24 @@ class RsyncDirector(Thread):
             if "timeout" in block:
                 timeout = timedelta(seconds=int(block["timeout"]))
                 timeout_threshold = datetime.now() + timeout
+
             while True and self.is_shutdown() == False:
                 # Get the type and see if we are blocked.
                 blocks_on_type = BlocksOnType.get_enum_value_from_string(block["type"])
+                logger = logger.bind(blocks_on_conf=block)
                 blocked = False
+
                 match blocks_on_type:
                     case BlocksOnType.LOCAL:
-                        blocked = RsyncDirector.__is_blocked_local(block, self.logger)
+                        blocked = RsyncDirector.__is_blocked_local(block, logger)
                     case BlocksOnType.REMOTE:
-                        blocked = RsyncDirector.__is_blocked_remote(block, self.logger)
+                        blocked = RsyncDirector.__is_blocked_remote(block, logger)
                     case _:
-                        self.logger.fatal(f"Unknown blocks_on type; type={blocks_on_type}")
+                        logger.fatal("Unknown blocks_on type")
                         sys.exit(1)
 
                 if not blocked:
-                    self.logger.info(f"block has been satisfied; job_id={job_id}, block={block}")
+                    logger.info("block has been satisfied")
                     break
 
                 if blocked:
@@ -155,11 +159,11 @@ class RsyncDirector(Thread):
                     if timeout_threshold and timeout:
                         timeout_delta = datetime.now() - timeout_threshold
                         if timeout_delta.total_seconds() > timeout.total_seconds():
-                            self.logger.info(f"block has timedout; job_id={job_id}, block={block}")
+                            logger.info("block has timedout")
                             return False
 
                     wait_time = block["wait_time"]
-                    self.logger.info(f"job is blocked; job_id={job_id}, wait_time={wait_time}")
+                    logger.info("job is blocked")
                     metrics.BLOCKED_COUNTER.labels(job_id).inc()
                     self.__interruptable_wait(wait_time)
 
@@ -170,7 +174,9 @@ class RsyncDirector(Thread):
     def __event_listener(self, event):
         def list_jobs():
             for job in self.scheduler.get_jobs():
-                self.logger.info(f"Job id={job.id}, scheduled for next run at {job.next_run_time}")
+                self.logger.info(
+                    "scheduled for next run", apscheduler_job_id=job.id, next_run=job.next_run_time
+                )
 
         if self.runonce and event.code == events.EVENT_JOB_EXECUTED:
             self.logger.info("runonce job finished, exiting")
@@ -189,13 +195,13 @@ class RsyncDirector(Thread):
     def __exec_job(self):
         self.logger.info("exec_job starting")
         if self.scheduled_job_running:
-            self.logger.warning(f"Unable to execute multiple jobs simultaneously, exiting exec_job")
+            self.logger.warning("Unable to execute multiple jobs simultaneously, exiting exec_job")
             return
         self.scheduled_job_running = True
 
         for job in self.configs["jobs"]:
             if self.is_shutdown():
-                self.logger.info(f"We have been shutdown, exiting jobs execution loop")
+                self.logger.info("We have been shutdown, exiting jobs execution loop")
                 break
             with metrics.JOB_DURATION.labels(job["id"]).time():
                 self.__run_job(job)
@@ -222,7 +228,6 @@ class RsyncDirector(Thread):
 
         # TODO: this can get removed once we validate and clean-up the configs on start-up.
         job_type = cfg.JobType[job["type"].upper()]
-
         rsync = Rsync(logger, result_queue, job_type, sync, user, host, port, private_key_path)
         rsync.run()
 
@@ -252,14 +257,14 @@ class RsyncDirector(Thread):
         return f"rsyncdirector-{id}.pid"
 
     def __get_process_command(
-        self, action: Dict
+        self, logger: Logger, action: Dict
     ) -> Tuple[multiprocessing.Process, multiprocessing.Queue]:
         result_queue = multiprocessing.Queue()
         args = action["args"] if "args" in action else None
         process = multiprocessing.Process(
             target=RsyncDirector.__exec_process_command,
             args=(
-                self.logger,
+                logger,
                 result_queue,
                 action["command"],
                 args,
@@ -268,7 +273,7 @@ class RsyncDirector(Thread):
         return process, result_queue
 
     def __get_process_rsync(
-        self, job: Dict, action: Dict
+        self, logger: Logger, job: Dict, action: Dict
     ) -> Tuple[multiprocessing.Process, multiprocessing.Queue]:
         result_queue = multiprocessing.Queue()
         sync = {
@@ -279,13 +284,22 @@ class RsyncDirector(Thread):
         process = multiprocessing.Process(
             target=RsyncDirector.__exec_process_rsync,
             args=(
-                self.logger,
+                logger,
                 result_queue,
                 job,
                 sync,
             ),
         )
         return process, result_queue
+
+    @staticmethod
+    def __get_app_version() -> str:
+        retval = "unknown"
+        try:
+            retval = version("rsyncdirector")
+        except PackageNotFoundError:
+            pass
+        return retval
 
     @staticmethod
     def __is_blocked_local(blocks_on_conf: Dict, logger: Logger) -> bool:
@@ -295,17 +309,17 @@ class RsyncDirector(Thread):
             with open(path, "r") as fh:
                 block_file_pid = fh.read().strip()
             logger.info(
-                f"local block file exists; block_on_conf={blocks_on_conf}, "
-                + f"block_file_pid={block_file_pid}"
+                "local block file exists",
+                block_file_pid=block_file_pid,
             )
             return True
 
         return False
 
     def __interruptable_wait(self, wait_time: int) -> None:
-        self.logger.info(f"interruptable wait_event waiting; wait_time={wait_time}")
+        self.logger.info("interruptable wait_event waiting", wait_time=wait_time)
         was_set = self.wait_event.wait(timeout=wait_time)
-        self.logger.info(f"wait_event complete; was_set={was_set}")
+        self.logger.info("wait_event complete", was_interrupted=was_set)
         self.wait_event.clear()
 
     def __interrupt_wait(self) -> None:
@@ -317,7 +331,7 @@ class RsyncDirector(Thread):
             self.wait_event.set()
 
     @staticmethod
-    def __is_blocked_remote(blocks_on_conf, logger):
+    def __is_blocked_remote(blocks_on_conf: Dict, logger: Logger):
         retval = False
         conn = None
         try:
@@ -335,18 +349,18 @@ class RsyncDirector(Thread):
                 result = conn.run(f"cat {path}", warn=True, hide=True)
                 if result.ok == False:
                     logger.error(
-                        f"unable to read the contents of remote block file; "
-                        + f"path={path}, "
-                        + f"stdout={result.stdout}, stderr={result.stdout}"
+                        "unable to read the contents of remote block file",
+                        stdout=result.stdout,
+                        stderr=result.stdout,
                     )
                 else:
                     block_file_pid = result.stdout.strip()
                     logger.info(
-                        f"remote block file exists; block_on_conf={blocks_on_conf}, "
-                        + f"block_file_pid={block_file_pid}"
+                        "remote block file exists",
+                        block_file_pid=block_file_pid,
                     )
         except Exception as e:
-            logger.error(f"checking for remote block; e={e}")
+            logger.error("checking for remote block", exception=e)
             traceback.print_exc()
         finally:
             if conn is not None:
@@ -354,11 +368,12 @@ class RsyncDirector(Thread):
         return retval
 
     def __lock_files(
-        self, job_id: str, lock_files: List[Dict], lock_file_action: LockFileAction
+        self, logger: Logger, job_id: str, lock_files: List[Dict], lock_file_action: LockFileAction
     ) -> None:
         for lock_file in lock_files:
             lock_file_type = LockFileType.get_enum_value_from_string(lock_file["type"])
             file_path = lock_file["path"]
+            logger = logger.bind(lock_file=lock_file, lock_file_action=lock_file_action)
             conn = None
 
             # A 'lock file' is nothing more than a file that contains the pid of the process that
@@ -368,40 +383,34 @@ class RsyncDirector(Thread):
             try:
                 match lock_file_type:
                     case LockFileType.LOCAL:
-                        pid_file = PidFileLocal(logger=self.logger, pid=self.pid, path=file_path)
+                        pid_file = PidFileLocal(logger=logger, pid=self.pid, path=file_path)
                     case LockFileType.REMOTE:
                         conn = RsyncDirector.__get_connection(lock_file)
                         pid_file = PidFileRemote(
-                            logger=self.logger, pid=self.pid, path=file_path, conn=conn
+                            logger=logger, pid=self.pid, path=file_path, conn=conn
                         )
                     case _:
-                        self.logger.fatal(f"Unknown lock_file.type; type={lock_file_type}")
+                        logger.fatal("Unknown lock_file.type")
                         sys.exit(1)
 
                 match lock_file_action:
                     case LockFileAction.DELETE:
                         if pid_file.delete() is not True:
-                            self.logger.fatal(
-                                f"unable to delete lock file; lock_file_type={lock_file_type}, file_path={file_path}"
-                            )
+                            logger.fatal("unable to delete lock file")
                             sys.exit(1)
                         metrics.LOCK_FILES.labels(job_id).dec()
                     case LockFileAction.WRITE:
                         if pid_file.write() is not True:
-                            self.logger.fatal(
-                                f"unable to write lock file; lock_file_type={lock_file_type}, file_path={file_path}"
-                            )
+                            self.logger.fatal("unable to write lock file")
                             sys.exit(1)
                         metrics.LOCK_FILES.labels(job_id).inc()
                         pass
                     case _:
-                        self.logger.fatal(
-                            f"Unknown lock_file_action; lock_file_action={lock_file_action}"
-                        )
+                        logger.fatal("Unknown lock_file_action")
                         sys.exit(1)
 
             except Exception as e:
-                self.logger.fatal(f"writing lock file; lock_file={lock_file}, e={e}")
+                logger.fatal("writing lock file", exception=e)
                 sys.exit(1)
             finally:
                 if conn is not None:
@@ -409,13 +418,13 @@ class RsyncDirector(Thread):
 
     def __run_job(self, job):
         job_id = job["id"]
+        logger = self.logger.bind(job_id=job_id, job_type=job["type"])
+
         if "blocks_on" in job:
             with metrics.BLOCKED_DURATION.labels(job["id"]).time():
-                continue_processing_job = self.__block(job_id, job["blocks_on"])
+                continue_processing_job = self.__block(logger, job_id, job["blocks_on"])
                 if not continue_processing_job:
-                    self.logger.info(
-                        f"block condition was not removed, not continuing processing job; job_id={job_id}"
-                    )
+                    logger.info("block condition was not removed, not continuing processing job")
                     metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc()
                     return
 
@@ -423,18 +432,17 @@ class RsyncDirector(Thread):
         has_lock_files = True if "lock_files" in job else False
         try:
             if has_lock_files:
-                self.__lock_files(job["id"], job["lock_files"], LockFileAction.WRITE)
+                self.__lock_files(logger, job["id"], job["lock_files"], LockFileAction.WRITE)
 
-            self.logger.info(f"Executing actions for job; job={job}")
+            logger.info("Executing actions for job")
             if "actions" not in job:
                 raise Exception(f"no actions defined in job; job={job}")
 
             for action in job["actions"]:
                 action_id = action["id"]
+                logger = logger.bind(action=action["action"], action_id=action_id)
                 if self.is_shutdown():
-                    self.logger.info(
-                        f"We have been shutdown, exiting __run_job, action execution loop"
-                    )
+                    logger.info("We have been shutdown, exiting __run_job, action execution loop")
                     break
 
                 # We run the action commands in a separate process altogether so that we can kill it
@@ -442,11 +450,11 @@ class RsyncDirector(Thread):
                 result_queue = None
                 match action["action"]:
                     case "sync":
-                        self.process, result_queue = self.__get_process_rsync(job, action)
+                        self.process, result_queue = self.__get_process_rsync(logger, job, action)
                     case "command":
-                        self.process, result_queue = self.__get_process_command(action)
+                        self.process, result_queue = self.__get_process_command(logger, action)
                     case _:
-                        self.logger.fatal(f"Unknown acton; action={action["action"]}")
+                        logger.fatal("Unknown acton", action=action)
                         sys.exit(1)
 
                 try:
@@ -473,9 +481,7 @@ class RsyncDirector(Thread):
                                 # Process still running, continue waiting . . . .
                                 continue
                             except Exception as e:
-                                self.logger.error(
-                                    f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
-                                )
+                                logger.error("reading from result queue failed", exception=e)
                                 break
 
                         # Process exited, try one final non-blocking read in case message arrived
@@ -484,9 +490,7 @@ class RsyncDirector(Thread):
                             try:
                                 result_msg = result_queue.get(block=False)
                             except:
-                                self.logger.error(
-                                    f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
-                                )
+                                logger.error("reading from result queue failed", exception=e)
                                 metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
                                     job_id, action_id
                                 ).inc()
@@ -496,14 +500,12 @@ class RsyncDirector(Thread):
                     self.process.join()
 
                     if self.process.exitcode != 0:
-                        self.logger.error(f"Process failed; exit_code: {self.process.exitcode}")
+                        logger.error("Process failed", exit_code=self.process.exitcode)
                         metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc()
                         return
 
                     if not result_msg:
-                        self.logger.error(
-                            f"reading from result queue failed; job_id={job_id}, action_id={action_id}, e={e}"
-                        )
+                        logger.error("reading from result queue failed, no result_msg")
                         metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc()
                         return
 
@@ -512,23 +514,23 @@ class RsyncDirector(Thread):
                         run_result = result_msg[0]
                         if run_result == RunResult.FAIL:
                             result = result_msg[1]
-                            self.logger.error(
-                                f"action failed, exiting job; job_id={job_id}, action_id={action_id}, "
-                                f"result.stdout={result.stdout.strip()}, result.sterr={result.stderr.strip()}, "
-                                f"result.return_code={result.return_code}, result={result_msg}"
+                            logger.error(
+                                "action failed, exiting job",
+                                result_stdout=result.stdout.strip(),
+                                result_sterr=result.stderr.strip(),
+                                result_return_code=result.return_code,
+                                result=result_msg,
                             )
                             metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(
                                 job_id, action_id
                             ).inc()
                             return
-                        self.logger.info(
-                            f"action suceeded; job_id={job_id}, action_id={action_id}, result={result_msg}"
-                        )
+                        logger.info("action suceeded", result=result_msg)
 
                 except Exception as e:
                     err_type = type(e).__name__
                     err_msg = str(e)
-                    self.logger.error(f"running job: error_type={err_type}, err_msg={err_msg}")
+                    logger.error("running job", error_type=err_type, err_msg=err_msg)
                     metrics.JOB_ABORTED_FOR_EXCEPTION_ERR.labels(job_id, action_id).inc()
                     return
                 finally:
@@ -537,10 +539,10 @@ class RsyncDirector(Thread):
 
         finally:
             if has_lock_files:
-                self.__lock_files(job["id"], job["lock_files"], LockFileAction.DELETE)
+                self.__lock_files(logger, job["id"], job["lock_files"], LockFileAction.DELETE)
 
     def __schedule_cron_job(self):
-        self.logger.info(f"Scheduling cron job with schedule={self.cron_schedule}")
+        self.logger.info("Scheduling cron job", schedule=self.cron_schedule)
         self.scheduler.add_job(
             func=self.__exec_job, trigger=CronTrigger.from_crontab(self.cron_schedule)
         )
@@ -595,27 +597,26 @@ class RsyncDirector(Thread):
         if self.process is not None:
             try:
                 if self.process.is_alive():
-                    self.logger.info(f"killing rsync process; process={self.process}")
+                    self.logger.info("killing rsync process", process=self.process)
                     self.process.kill()
                     self.process.join(RsyncDirector.SUB_PROCESS_JOIN_SECONDS)
             except Exception as e:
-                self.logger.warning(f"terminating process; e={e}")
+                self.logger.warning("terminating process", exception=e)
 
         # Stop the scheduler.
         if self.scheduler.running:
-            self.logger.info("Shutting down scheduler")
             current_jobs = self.scheduler.get_jobs()
-            self.logger.info(f"current_jobs={current_jobs}")
+            self.logger.info("Shutting down scheduler", current_jobs=current_jobs)
             try:
                 self.scheduler.shutdown(wait=False)
             except Exception as e:
-                self.logger.info(f"Caught exception shutting down the scheduler; e={e}")
+                self.logger.info("Caught exception shutting down the scheduler", exception=e)
 
         self.logger.info("RsyncDirector exiting run")
 
     def schedule_runonce_job(self):
         if not self.scheduled_job_running:
-            self.logger.info(f"Scheduling a runonce job")
+            self.logger.info("Scheduling a runonce job")
             self.scheduler.add_job(
                 max_instances=1, id=RsyncDirector.JOB_ID_RUNONCE, func=self.__exec_job
             )

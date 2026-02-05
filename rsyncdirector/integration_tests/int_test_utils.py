@@ -280,7 +280,7 @@ class IntegrationTestUtils(object):
         for k, v in env_vars.items():
             # Generate a key by removing the prefix and converting to lower-case
             key = k.replace(f"{ENV_VAR_PREFIX}_", "").lower()
-            logger.info("env_var", key=k, value=v)
+            logger.info("envvar", envvar_key=k, envvar_value=v)
             retval[key] = v
 
         # Generate a log message of all of the test config values.
