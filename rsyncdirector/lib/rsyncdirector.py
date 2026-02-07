@@ -72,7 +72,7 @@ class RsyncDirector(Thread):
                 "Required env var defining path to config file is not defined; "
                 f"export {cfg.CONFIG_ENV_VAR_KEY} pointing to path of a valid config file"
             )
-        self.config = env_vars[cfg.CONFIG_ENV_VAR_KEY]
+        self.config_file_path = env_vars[cfg.CONFIG_ENV_VAR_KEY]
         self.dryrun = (
             True
             if cfg.DRYRUN_ENV_VAR_KEY in env_vars and env_vars[cfg.DRYRUN_ENV_VAR_KEY] == "1"
@@ -85,7 +85,7 @@ class RsyncDirector(Thread):
         )
 
         # TODO: validate configs
-        self.configs = cfg.Config.load_configs(self.config)
+        self.configs = cfg.Config.load_configs(self.config_file_path)
         self.rsync_id = self.configs["rsync_id"]
         self.logger = logger.bind(rsync_id=self.rsync_id, version=self.version)
 
@@ -175,7 +175,9 @@ class RsyncDirector(Thread):
         def list_jobs():
             for job in self.scheduler.get_jobs():
                 self.logger.info(
-                    "scheduled for next run", apscheduler_job_id=job.id, next_run=job.next_run_time.isoformat()
+                    "scheduled for next run",
+                    apscheduler_job_id=job.id,
+                    next_run=job.next_run_time.isoformat(),
                 )
 
         if self.runonce and event.code == events.EVENT_JOB_EXECUTED:
@@ -567,7 +569,23 @@ class RsyncDirector(Thread):
                 startup_num_retries = int(metrics["startup_retry_limit"])
 
         self.metrics = Metrics(logger=self.logger, addr=addr, port=port)
+        self.__initialize_metrics()
         self.metrics.start(startup_timeout_seconds, startup_retry_wait_seconds, startup_num_retries)
+
+    def __initialize_metrics(self) -> None:
+        metrics.RUNS_COMPLETED.labels(self.rsync_id).inc(0)
+
+        for job in self.configs["jobs"]:
+            job_id = job["id"]
+            metrics.BLOCKED_COUNTER.labels(job_id).inc(0)
+            metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
+            metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
+            
+            for action in job["actions"]:
+                action_id = action["id"]
+                metrics.JOB_ABORTED_FOR_EXCEPTION_ERR.labels(job_id, action_id).inc(0)
+                metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc(0)
+                metrics.JOB_ABORTED_FOR_FAILED_PROCESS_ERR.labels(job_id, action_id).inc(0)
 
     # ##########################################################################
     # Public methods and funcs

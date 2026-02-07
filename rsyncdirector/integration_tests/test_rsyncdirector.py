@@ -6,30 +6,26 @@
 
 import os
 import stat
-import rsyncdirector.lib.config as cfg
 from datetime import timedelta
-from rsyncdirector.integration_tests.it_base import ITBase, ExpectedData, ExpectedDir, ExpectedFile
+
+import rsyncdirector.lib.config as cfg
 from rsyncdirector.integration_tests.int_test_utils import (
-    IntegrationTestUtils,
+    RSYNC_ID_DEFAULT,
+    BlocksOn,
+    BlocksOnRemote,
+    CommandAction,
     ContainerType,
+    IntegrationTestUtils,
     Job,
     LockFile,
     RemoteLockFile,
-    BlocksOn,
-    BlocksOnRemote,
     SyncAction,
-    CommandAction,
-    RSYNC_ID_DEFAULT,
 )
-from rsyncdirector.integration_tests.metrics_scraper import (
-    Metric,
-    MetricsConditions,
-    WaitFor,
-)
+from rsyncdirector.integration_tests.it_base import ExpectedData, ExpectedDir, ExpectedFile, ITBase
+from rsyncdirector.integration_tests.metrics_scraper import Metric, MetricsConditions, WaitFor
+from rsyncdirector.lib.config import JobType
 from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
-from rsyncdirector.lib.config import JobType
-
 
 RUNONCE_ENV_VAR_KEY = f"{cfg.ENV_VAR_PREFIX}_{cfg.ENV_VAR_RUNONCE}"
 RUNONCE_ENV_VAR = {RUNONCE_ENV_VAR_KEY: "1"}
@@ -225,7 +221,11 @@ class ITRsyncDirector(ITBase):
 
             metrics_conditions = MetricsConditions(
                 metrics=[
-                    Metric(name="blocked_total", labels={"job_id": "local_to_container"}, value=1.0)
+                    Metric(
+                        name="rsyncdirector_blocked_total",
+                        labels={"job_id": "local_to_container"},
+                        value=1.0,
+                    )
                 ]
             )
             WaitFor.metrics(
@@ -290,7 +290,11 @@ class ITRsyncDirector(ITBase):
 
         metrics_conditions = MetricsConditions(
             metrics=[
-                Metric(name="blocked_total", labels={"job_id": "local_to_container"}, value=1.0)
+                Metric(
+                    name="rsyncdirector_blocked_total",
+                    labels={"job_id": "local_to_container"},
+                    value=1.0,
+                )
             ]
         )
         WaitFor.metrics(
@@ -342,7 +346,7 @@ class ITRsyncDirector(ITBase):
             job.actions = [
                 SyncAction(
                     action="sync",
-                    id=f"sync of {source_data_dir}",
+                    id=f"sync-of-{source_data_dir}",
                     source=source_data_dir,
                     dest="/data",
                     opts=["-av", "--delete"],
@@ -371,7 +375,9 @@ class ITRsyncDirector(ITBase):
             # Once we see that we have been blocked at least once, remove the remote lock file and then
             # we should block on the local lock file.
             metrics_conditions = MetricsConditions(
-                metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)]
+                metrics=[
+                    Metric(name="rsyncdirector_blocked_total", labels={"job_id": job_id}, value=1.0)
+                ]
             )
             WaitFor.metrics(
                 logger=self.logger,
@@ -391,7 +397,9 @@ class ITRsyncDirector(ITBase):
             # Once we see that we have been blocked once more, remove the lock file and the
             # rsyncdirector should continue executing the job.
             metrics_conditions = MetricsConditions(
-                metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=2.0)]
+                metrics=[
+                    Metric(name="rsyncdirector_blocked_total", labels={"job_id": job_id}, value=2.0)
+                ]
             )
             WaitFor.metrics(
                 logger=self.logger,
@@ -487,7 +495,7 @@ class ITRsyncDirector(ITBase):
             metrics_conditions = MetricsConditions(
                 metrics=[
                     Metric(
-                        name="lock_files",
+                        name="rsyncdirector_lock_files",
                         labels={"job_id": "local_to_container_multi_lock_files"},
                         value=2.0,
                     )
@@ -561,7 +569,13 @@ class ITRsyncDirector(ITBase):
         rsyncdirector = self.run_rsyncdirector()
 
         metrics_conditions = MetricsConditions(
-            metrics=[Metric(name="runs_completed_total", labels={"rsync_id": rsync_id}, value=1.0)]
+            metrics=[
+                Metric(
+                    name="rsyncdirector_runs_completed_total",
+                    labels={"rsync_id": rsync_id},
+                    value=1.0,
+                )
+            ]
         )
         # Wait for 90 seconds because the cron should run within 60.
         WaitFor.metrics(
@@ -696,7 +710,11 @@ class ITRsyncDirector(ITBase):
 
             metrics_conditions = MetricsConditions(
                 metrics=[
-                    Metric(name="blocked_total", labels={"job_id": "interruptable_wait"}, value=1.0)
+                    Metric(
+                        name="rsyncdirector_blocked_total",
+                        labels={"job_id": "interruptable_wait"},
+                        value=1.0,
+                    )
                 ]
             )
             WaitFor.metrics(
@@ -775,7 +793,7 @@ class ITRsyncDirector(ITBase):
             metrics_conditions = MetricsConditions(
                 metrics=[
                     Metric(
-                        name="job_skipped_for_block_timeout_total",
+                        name="rsyncdirector_job_skipped_for_block_timeout_total",
                         labels={"job_id": job_id},
                         value=1.0,
                     )
@@ -845,7 +863,9 @@ class ITRsyncDirector(ITBase):
         rsyncdirector = self.run_rsyncdirector()
 
         metrics_conditions = MetricsConditions(
-            metrics=[Metric(name="blocked_total", labels={"job_id": job_id}, value=1.0)]
+            metrics=[
+                Metric(name="rsyncdirector_blocked_total", labels={"job_id": job_id}, value=1.0)
+            ]
         )
         WaitFor.metrics(
             logger=self.logger,
@@ -863,7 +883,7 @@ class ITRsyncDirector(ITBase):
         metrics_conditions = MetricsConditions(
             metrics=[
                 Metric(
-                    name="lock_files",
+                    name="rsyncdirector_lock_files",
                     labels={"job_id": job_id},
                     value=1.0,
                 )

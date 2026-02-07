@@ -2,10 +2,20 @@ import io
 import sys
 import logging
 import structlog
+from datetime import datetime
 from typing import Union, Any
 from structlog.stdlib import BoundLogger
 
 Logger = Union[BoundLogger, Any]
+
+
+def add_timestamp(logger, method_name, event_dict):
+    """
+    Add ISO 8601 timestamp with timezone offset. to ensure that we are compabible with ELK stack
+    timestamp formats.
+    """
+    event_dict["@timestamp"] = datetime.now().astimezone().isoformat()
+    return event_dict
 
 
 def get_logger(
@@ -23,7 +33,7 @@ def get_logger(
     # These run for BOTH the logger created here and third-party library logs.
     shared_processors = [
         structlog.contextvars.merge_contextvars,
-        structlog.processors.TimeStamper(fmt="iso", key="@timestamp", utc=False),
+        add_timestamp,
         structlog.processors.add_log_level,
         structlog.processors.CallsiteParameterAdder(
             {
