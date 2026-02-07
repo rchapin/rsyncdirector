@@ -1,8 +1,10 @@
-from flask import Flask
-from prometheus_client import Counter, Gauge, Histogram, Metric, generate_latest, start_http_server
-from rsyncdirector.lib.utils import Utils
-from rsyncdirector.lib.logging import Logger
 import time
+
+from flask import Flask
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, start_http_server
+
+from rsyncdirector.lib.logging import Logger
+from rsyncdirector.lib.utils import Utils
 
 NAME = "metrics"
 PREFIX = "rsyncdirector"

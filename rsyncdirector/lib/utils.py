@@ -4,12 +4,13 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import requests
-import socket
 import string
 import subprocess
 import time
 from typing import Tuple
+
+import requests
+
 from rsyncdirector.lib.logging import Logger
 
 

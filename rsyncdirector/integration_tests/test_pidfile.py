@@ -5,17 +5,18 @@
 # All rights reserved.
 
 import os
-import psutil
 import random
 import sys
-from fabric import Connection
 from pathlib import Path
-from rsyncdirector.lib import logging
-from rsyncdirector.lib.pidfile import PidFile, PidFileLocal, PidFileRemote
-from rsyncdirector.integration_tests.it_base import ITBase
-from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType
 from typing import Callable, Tuple
 
+import psutil
+from fabric import Connection
+
+from rsyncdirector.integration_tests.int_test_utils import ContainerType, IntegrationTestUtils
+from rsyncdirector.integration_tests.it_base import ITBase
+from rsyncdirector.lib import logging
+from rsyncdirector.lib.pidfile import PidFile, PidFileLocal, PidFileRemote
 
 FILE_NAME = "pid_file.txt"
 PID = 647

@@ -4,24 +4,21 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-import unittest
 import os
-import psutil
-import rsyncdirector.lib.config as cfg
 import shutil
+import unittest
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable, List, Set, Tuple
-from rsyncdirector.integration_tests.int_test_utils import IntegrationTestUtils, ContainerType
+
+import psutil
+
+from rsyncdirector.integration_tests.int_test_utils import ContainerType, IntegrationTestUtils
+from rsyncdirector.integration_tests.metrics_scraper import MetricsScraper, MetricsScraperCfg
 from rsyncdirector.lib import logging
-from rsyncdirector.lib.logging import Logger
-from rsyncdirector.lib.rsyncdirector import RsyncDirector
 from rsyncdirector.lib.config import JobType
-from rsyncdirector.integration_tests.metrics_scraper import (
-    MetricsScraper,
-    MetricsScraperCfg,
-)
+from rsyncdirector.lib.logging import Logger
 
 DOCKER_SSH_WAIT_TIME = 1
 

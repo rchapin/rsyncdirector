@@ -1,9 +1,10 @@
 import io
-import sys
 import logging
-import structlog
+import sys
 from datetime import datetime
-from typing import Union, Any
+from typing import Any, Union
+
+import structlog
 from structlog.stdlib import BoundLogger
 
 Logger = Union[BoundLogger, Any]

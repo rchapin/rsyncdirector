@@ -6,6 +6,7 @@
 
 from enum import Enum
 from typing import Dict
+
 import yaml
 
 ENV_VAR_PREFIX = "RSYNCMANANGER"

@@ -5,11 +5,13 @@
 # All rights reserved.
 
 import multiprocessing
-from rsyncdirector.lib.logging import Logger, LogStreamer
+from typing import Dict
+
+from invoke import run
+
 from rsyncdirector.lib.config import JobType
 from rsyncdirector.lib.enums import RunResult
-from invoke import run
-from typing import Dict
+from rsyncdirector.lib.logging import Logger, LogStreamer
 
 
 class Rsync(object):

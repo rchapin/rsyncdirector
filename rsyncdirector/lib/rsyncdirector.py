@@ -10,25 +10,27 @@ import queue
 import sys
 import time
 import traceback
-import rsyncdirector.lib.config as cfg
-import rsyncdirector.lib.metrics as metrics
+from datetime import datetime, timedelta
+from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
+from threading import Event, Thread
+from typing import Any, Dict, List, Tuple
+
 from apscheduler import events
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime, timedelta
-from importlib.metadata import version, PackageNotFoundError
-from rsyncdirector.lib.config import BlocksOnType, LockFileType
-from rsyncdirector.lib.enums import RunResult
-from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
-from rsyncdirector.lib.logging import Logger
-from rsyncdirector.lib.rsync import Rsync
-from rsyncdirector.lib.command import Command
-from rsyncdirector.lib.metrics import Metrics
-from enum import Enum
 from fabric import Connection
 from invoke import run
-from threading import Event, Thread
-from typing import Any, List, Dict, Tuple
+
+import rsyncdirector.lib.config as cfg
+import rsyncdirector.lib.metrics as metrics
+from rsyncdirector.lib.command import Command
+from rsyncdirector.lib.config import BlocksOnType, LockFileType
+from rsyncdirector.lib.enums import RunResult
+from rsyncdirector.lib.logging import Logger
+from rsyncdirector.lib.metrics import Metrics
+from rsyncdirector.lib.pidfile import PidFileLocal, PidFileRemote
+from rsyncdirector.lib.rsync import Rsync
 
 
 class LockFileAction(Enum):

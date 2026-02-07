@@ -7,8 +7,9 @@
 import logging
 import unittest
 from dataclasses import dataclass
-from rsyncdirector.lib import logging
+
 from rsyncdirector.integration_tests.metrics_scraper import MetricsScraper
+from rsyncdirector.lib import logging
 
 INPUT = """
 # HELP python_gc_objects_collected_total Objects collected during gc

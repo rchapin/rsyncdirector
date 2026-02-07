@@ -5,10 +5,12 @@
 # All rights reserved.
 
 import multiprocessing
-from rsyncdirector.lib.logging import Logger, LogStreamer
-from rsyncdirector.lib.enums import RunResult
-from invoke import run
 from typing import List
+
+from invoke import run
+
+from rsyncdirector.lib.enums import RunResult
+from rsyncdirector.lib.logging import Logger, LogStreamer
 
 
 class Command(object):

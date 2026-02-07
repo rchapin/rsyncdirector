@@ -6,12 +6,14 @@
 
 import os
 import sys
-import psutil
-import rsyncdirector.lib.metrics as metrics
 from abc import ABC, abstractmethod
 from pathlib import Path
-from fabric import Connection
 from typing import Tuple
+
+import psutil
+from fabric import Connection
+
+import rsyncdirector.lib.metrics as metrics
 from rsyncdirector.lib.logging import Logger
 
 

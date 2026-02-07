@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 import unittest
+from dataclasses import dataclass
+
 from rsyncdirector.lib.utils import Utils
 
 

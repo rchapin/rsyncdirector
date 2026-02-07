@@ -7,6 +7,7 @@
 import os
 from typing import Dict
 
+
 class EnvVars(object):
 
     @staticmethod

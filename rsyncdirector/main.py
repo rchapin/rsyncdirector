@@ -7,12 +7,12 @@
 import signal
 import time
 from functools import partial
-from rsyncdirector.lib import config
+from types import FrameType
+
+from rsyncdirector.lib import config, logging
 from rsyncdirector.lib.envvars import EnvVars
-from rsyncdirector.lib import logging
 from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.rsyncdirector import RsyncDirector
-from types import FrameType
 
 
 def signal_handler(

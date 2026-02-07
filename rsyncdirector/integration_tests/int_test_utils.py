@@ -4,23 +4,24 @@
 # Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
 # All rights reserved.
 
-from collections import namedtuple
-from dataclasses import dataclass, field
-from dataclass_wizard import JSONWizard, YAMLWizard
-from datetime import datetime, timedelta
-from enum import Enum, auto
-from fabric import Connection
-from typing import List, Optional, Sequence, NamedTuple
-import docker
 import os
 import random
 import string
 import time
+from collections import namedtuple
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import List, Optional, Sequence
+
+import docker
 import yaml
+from dataclass_wizard import JSONWizard
+from fabric import Connection
+
+from rsyncdirector.lib.config import JobType
 from rsyncdirector.lib.envvars import EnvVars
 from rsyncdirector.lib.logging import Logger
 from rsyncdirector.lib.utils import Utils
-from rsyncdirector.lib.config import JobType
 
 
 class ContainerType(Enum):

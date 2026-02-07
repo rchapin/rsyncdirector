@@ -6,12 +6,14 @@
 
 import copy
 import os
-import requests
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from threading import Event, Lock, Thread
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
+
+import requests
+
 from rsyncdirector.lib.logging import Logger
 
 

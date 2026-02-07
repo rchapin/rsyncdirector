@@ -1,7 +1,5 @@
-from dataclasses import dataclass
 import unittest
-from rsyncdirector.lib.config import Config
-from typing import Dict
+from dataclasses import dataclass
 
 
 class ConfigTest(unittest.TestCase):
