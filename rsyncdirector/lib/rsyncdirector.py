@@ -580,7 +580,7 @@ class RsyncDirector(Thread):
             metrics.BLOCKED_COUNTER.labels(job_id).inc(0)
             metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
             metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
-            
+           
             for action in job["actions"]:
                 action_id = action["id"]
                 metrics.JOB_ABORTED_FOR_EXCEPTION_ERR.labels(job_id, action_id).inc(0)

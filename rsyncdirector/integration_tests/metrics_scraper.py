@@ -5,6 +5,7 @@
 # All rights reserved.
 
 import copy
+import os
 import requests
 import time
 from dataclasses import dataclass
@@ -77,6 +78,10 @@ class MetricsScraper(Thread):
                 self.metrics_lock.acquire_lock()
                 self.metrics = metrics
                 self.metrics_lock.release_lock()
+            except AssertionError as e:
+                self.logger.error("AssertionError", e=e)
+                os._exit(1)
+
             except Exception as e:
                 err_count = err_count + 1
                 # We never re-raise the exception, just keep trying until we are shutdown.
@@ -97,10 +102,14 @@ class MetricsScraper(Thread):
 
             if not line.startswith("#"):
                 tokens = line.split()
-                assert len(tokens) == 2
+                assert (
+                    len(tokens) == 2
+                ), f"likely test data included with spaces in ids; line={line}, tokens={tokens}"
 
                 name_tokens = tokens[0].split("{")
-                assert len(name_tokens) > 0
+                assert (
+                    len(name_tokens) > 0
+                ), f"likely test data included with spaces in ids; line={line}, tokens={tokens}"
                 name = name_tokens[0]
 
                 val = None
