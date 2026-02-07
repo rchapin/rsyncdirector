@@ -11,6 +11,12 @@ RUNS_COMPLETED = Counter(
     f"{PREFIX}_runs_completed", "Number of runs completed", labelnames=["rsync_id"]
 )
 
+ACTION_EXECUTION_ERR = Counter(
+    f"{PREFIX}_action_exec_err",
+    "Number of action execution errors",
+    labelnames=["job_id", "action_id"],
+)
+
 JOB_DURATION = Histogram(
     name=f"{PREFIX}_job_duration_seconds",
     documentation="Duration of job in seconds",
@@ -91,9 +97,13 @@ BLOCKED_DURATION = Histogram(
     ),
 )
 
+BLOCK_FILE_ERR = Counter(f"{PREFIX}_block_file_err", "Number of block file errors")
+
 LOCK_FILES = Gauge(
     f"{PREFIX}_lock_files", "Number of currently existing lock files", labelnames=["job_id"]
 )
+
+PID_FILE_ERR = Counter(f"{PREFIX}_pid_file_err", "Number of pid file errors")
 
 
 class Metrics(object):

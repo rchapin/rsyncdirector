@@ -7,6 +7,7 @@
 import os
 import sys
 import psutil
+import rsyncdirector.lib.metrics as metrics
 from abc import ABC, abstractmethod
 from pathlib import Path
 from fabric import Connection
@@ -132,6 +133,7 @@ class PidFileRemote(PidFile):
         )
         if not result.ok:
             self.logger.error("checking for existing pid file", result=result)
+            metrics.PID_FILE_ERR.inc()
             return False, ""
         stdout = result.stdout
         file_exists = True if stdout.strip() == "1" else False
@@ -142,6 +144,7 @@ class PidFileRemote(PidFile):
         result = self.conn.run(f"cat {self.path}", warn=True, hide=True)
         if not result.ok:
             self.logger.error("cat'ing pid file path", result=result)
+            metrics.PID_FILE_ERR.inc()
             return False, ""
 
         existing_pid = result.stdout
@@ -160,6 +163,7 @@ class PidFileRemote(PidFile):
             result = self.conn.run(f"echo {self.pid} > {self.path}")
             if not result.ok:
                 self.logger.error("writing remote pid file", result=result)
+                metrics.PID_FILE_ERR.inc()
                 return False
             return True
         return False

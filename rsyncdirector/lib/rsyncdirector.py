@@ -100,6 +100,7 @@ class RsyncDirector(Thread):
         self.pid_file = PidFileLocal(logger=self.logger, pid=self.pid, path=pid_path)
         if not self.pid_file.write():
             self.logger.error("unable to write pidfile, shutting down", pid_path=pid_path)
+            metrics.PID_FILE_ERR.inc()
             self.shutdown()
             return
         self.logger = self.logger.bind(pid=self.pid)
@@ -355,6 +356,7 @@ class RsyncDirector(Thread):
                         stdout=result.stdout,
                         stderr=result.stdout,
                     )
+                    metrics.BLOCK_FILE_ERR.inc()
                 else:
                     block_file_pid = result.stdout.strip()
                     logger.info(
@@ -363,6 +365,7 @@ class RsyncDirector(Thread):
                     )
         except Exception as e:
             logger.error("checking for remote block", exception=e)
+            metrics.BLOCK_FILE_ERR.inc()
             traceback.print_exc()
         finally:
             if conn is not None:
@@ -484,6 +487,7 @@ class RsyncDirector(Thread):
                                 continue
                             except Exception as e:
                                 logger.error("reading from result queue failed", exception=e)
+                                metrics.ACTION_EXECUTION_ERR.labels(job_id, action_id).inc()
                                 break
 
                         # Process exited, try one final non-blocking read in case message arrived
@@ -573,6 +577,8 @@ class RsyncDirector(Thread):
         self.metrics.start(startup_timeout_seconds, startup_retry_wait_seconds, startup_num_retries)
 
     def __initialize_metrics(self) -> None:
+        metrics.BLOCK_FILE_ERR.inc(0)
+        metrics.PID_FILE_ERR.inc(0)
         metrics.RUNS_COMPLETED.labels(self.rsync_id).inc(0)
 
         for job in self.configs["jobs"]:
@@ -580,9 +586,10 @@ class RsyncDirector(Thread):
             metrics.BLOCKED_COUNTER.labels(job_id).inc(0)
             metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
             metrics.JOB_SKIPPED_FOR_BLOCK_TIMEOUT_COUNTER.labels(job_id).inc(0)
-           
+
             for action in job["actions"]:
                 action_id = action["id"]
+                metrics.ACTION_EXECUTION_ERR.labels(job_id, action_id).inc(0)
                 metrics.JOB_ABORTED_FOR_EXCEPTION_ERR.labels(job_id, action_id).inc(0)
                 metrics.JOB_ABORTED_FOR_FAILED_ACTION_ERR.labels(job_id, action_id).inc(0)
                 metrics.JOB_ABORTED_FOR_FAILED_PROCESS_ERR.labels(job_id, action_id).inc(0)
