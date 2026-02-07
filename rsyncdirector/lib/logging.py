@@ -23,7 +23,7 @@ def get_logger(
     # These run for BOTH the logger created here and third-party library logs.
     shared_processors = [
         structlog.contextvars.merge_contextvars,
-        structlog.processors.TimeStamper(fmt="iso", key="@timestamp"),
+        structlog.processors.TimeStamper(fmt="iso", key="@timestamp", utc=False),
         structlog.processors.add_log_level,
         structlog.processors.CallsiteParameterAdder(
             {

@@ -175,7 +175,7 @@ class RsyncDirector(Thread):
         def list_jobs():
             for job in self.scheduler.get_jobs():
                 self.logger.info(
-                    "scheduled for next run", apscheduler_job_id=job.id, next_run=job.next_run_time
+                    "scheduled for next run", apscheduler_job_id=job.id, next_run=job.next_run_time.isoformat()
                 )
 
         if self.runonce and event.code == events.EVENT_JOB_EXECUTED:
